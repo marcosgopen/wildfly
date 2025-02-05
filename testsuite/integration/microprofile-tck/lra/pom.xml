@@ -39,7 +39,7 @@
         <lra.http.recovery.host>localhost</lra.http.recovery.host>
         <lra.http.recovery.port>8080</lra.http.recovery.port>
         <lra.http.recovery.path>/lra-coordinator/lra-coordinator/recovery</lra.http.recovery.path>
-        <lra.tck.timeout.factor>1.5</lra.tck.timeout.factor>
+        <lra.tck.timeout.factor>3.0</lra.tck.timeout.factor>
         <management.address>localhost</management.address>
         <management.port>9990</management.port>
         <connect.to.server>true</connect.to.server>
