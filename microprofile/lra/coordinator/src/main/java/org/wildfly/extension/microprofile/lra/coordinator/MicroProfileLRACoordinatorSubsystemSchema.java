@@ -20,6 +20,7 @@ import static org.jboss.as.controller.PersistentResourceXMLDescription.builder;
  */
 public enum MicroProfileLRACoordinatorSubsystemSchema implements PersistentSubsystemSchema<MicroProfileLRACoordinatorSubsystemSchema> {
     VERSION_1_0(1),
+    VERSION_2_0(2),
     ;
 
     private final VersionedNamespace<IntVersion, MicroProfileLRACoordinatorSubsystemSchema> namespace;
@@ -35,8 +36,11 @@ public enum MicroProfileLRACoordinatorSubsystemSchema implements PersistentSubsy
 
     @Override
     public PersistentResourceXMLDescription getXMLDescription() {
-        return builder(MicroProfileLRACoordinatorSubsystemDefinition.PATH, this.namespace)
-            .addAttributes(MicroProfileLRACoordinatorSubsystemDefinition.ATTRIBUTES)
-            .build();
+        PersistentResourceXMLDescription.Builder b = builder(MicroProfileLRACoordinatorSubsystemDefinition.PATH, this.namespace)
+            .addAttributes(MicroProfileLRACoordinatorSubsystemDefinition.SERVER, MicroProfileLRACoordinatorSubsystemDefinition.HOST);
+        if (this.since(VERSION_2_0)) {
+            b.addAttribute(MicroProfileLRACoordinatorSubsystemDefinition.CONTEXT_PATH);
+        }
+        return b.build();
     }
 }

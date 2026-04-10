@@ -36,13 +36,14 @@ class MicroProfileLRACoordinatorAdd extends AbstractBoottimeAddStepHandler {
     protected void performBoottime(OperationContext context, ModelNode operation, ModelNode model) throws OperationFailedException {
         super.performBoottime(context, operation, model);
 
-        registerRecoveryService(context);
-        registerCoordinatorService(context, model);
+        String contextPath = MicroProfileLRACoordinatorSubsystemDefinition.CONTEXT_PATH.resolveModelAttribute(context, model).asString();
+        registerRecoveryService(context, contextPath);
+        registerCoordinatorService(context, model, contextPath);
 
         MicroProfileLRACoordinatorLogger.LOGGER.activatingSubsystem();
     }
 
-    private void registerCoordinatorService(final OperationContext context, final ModelNode model) throws OperationFailedException {
+    private void registerCoordinatorService(final OperationContext context, final ModelNode model, final String contextPath) throws OperationFailedException {
         CapabilityServiceBuilder builder = context.getCapabilityServiceTarget()
             .addCapability(MicroProfileLRACoordinatorSubsystemDefinition.LRA_COORDINATOR_CAPABILITY);
 
@@ -51,7 +52,7 @@ class MicroProfileLRACoordinatorAdd extends AbstractBoottimeAddStepHandler {
         String hostModelValue = MicroProfileLRACoordinatorSubsystemDefinition.HOST.resolveModelAttribute(context, model).asString();
         Supplier<Host> hostSupplier = builder.requiresCapability(Capabilities.CAPABILITY_HOST, Host.class, serverModelValue, hostModelValue);
 
-        final LRACoordinatorService lraCoordinatorService = new LRACoordinatorService(hostSupplier);
+        final LRACoordinatorService lraCoordinatorService = new LRACoordinatorService(hostSupplier, contextPath);
 
         builder.requiresCapability(MicroProfileLRACoordinatorSubsystemDefinition.LRA_RECOVERY_SERVICE_CAPABILITY_NAME, null);
 
@@ -59,14 +60,14 @@ class MicroProfileLRACoordinatorAdd extends AbstractBoottimeAddStepHandler {
         builder.setInitialMode(ServiceController.Mode.ACTIVE).install();
     }
 
-    private void registerRecoveryService(final OperationContext context) {
+    private void registerRecoveryService(final OperationContext context, final String contextPath) {
         CapabilityServiceBuilder builder = context.getCapabilityServiceTarget().addCapability(
             MicroProfileLRACoordinatorSubsystemDefinition.LRA_RECOVERY_SERVICE_CAPABILITY);
         builder.provides(MicroProfileLRACoordinatorSubsystemDefinition.LRA_RECOVERY_SERVICE_CAPABILITY);
         // JTA is required to be loaded before the LRA recovery setup
         builder.requiresCapability(MicroProfileLRACoordinatorSubsystemDefinition.REF_JTA_RECOVERY_CAPABILITY, XAResourceRecoveryRegistry.class);
         Supplier<ExecutorService> executorSupplier = Services.requireServerExecutor(builder);
-        final LRARecoveryService lraRecoveryService = new LRARecoveryService(executorSupplier);
+        final LRARecoveryService lraRecoveryService = new LRARecoveryService(executorSupplier, contextPath);
         builder.setInstance(lraRecoveryService);
         builder.setInitialMode(ServiceController.Mode.ACTIVE).install();
     }

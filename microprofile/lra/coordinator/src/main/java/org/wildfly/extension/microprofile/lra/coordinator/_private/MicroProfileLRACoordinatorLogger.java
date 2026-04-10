@@ -15,6 +15,8 @@ import org.jboss.logging.annotations.Message;
 import org.jboss.logging.annotations.MessageLogger;
 import org.jboss.msc.service.StartException;
 
+import org.jboss.as.controller.OperationFailedException;
+
 import static org.jboss.logging.Logger.Level.ERROR;
 import static org.jboss.logging.Logger.Level.INFO;
 import static org.jboss.logging.Logger.Level.WARN;
@@ -56,4 +58,7 @@ public interface MicroProfileLRACoordinatorLogger extends BasicLogger {
     @Message(id = 5, value = "Failed to start a recovery scan on the Narayana MicroProfile LRA Coordinator at path %s/"
             + LRAConstants.COORDINATOR_PATH_NAME)
     void failedToRunRecoveryScan(String path, @Cause Exception cause);
+
+    @Message(id = 6, value = "context-path must start with '/' but was '%s'")
+    OperationFailedException contextPathMustStartWithSlash(String path);
 }

@@ -6,6 +6,7 @@
 package org.wildfly.extension.microprofile.lra.coordinator;
 
 import org.jboss.as.controller.AttributeDefinition;
+import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.ReloadRequiredRemoveStepHandler;
 import org.jboss.as.controller.ReloadRequiredWriteAttributeHandler;
@@ -15,10 +16,12 @@ import org.jboss.as.controller.SimpleResourceDefinition;
 import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.descriptions.ParentResourceDescriptionResolver;
 import org.jboss.as.controller.descriptions.SubsystemResourceDescriptionResolver;
+import org.jboss.as.controller.operations.validation.ModelTypeValidator;
 import org.jboss.as.controller.registry.AttributeAccess;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
+import org.wildfly.extension.microprofile.lra.coordinator._private.MicroProfileLRACoordinatorLogger;
 import org.wildfly.extension.undertow.Constants;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUBSYSTEM;
@@ -59,7 +62,27 @@ public class MicroProfileLRACoordinatorSubsystemDefinition extends SimpleResourc
             .setDefaultValue(new ModelNode(Constants.DEFAULT_HOST))
             .build();
 
-    static final AttributeDefinition[] ATTRIBUTES = {SERVER, HOST};
+    static final SimpleAttributeDefinition CONTEXT_PATH =
+        new SimpleAttributeDefinitionBuilder(CommonAttributes.CONTEXT_PATH, ModelType.STRING, true)
+            .setAllowExpression(true)
+            .setXmlName(CommonAttributes.CONTEXT_PATH)
+            .setFlags(AttributeAccess.Flag.RESTART_ALL_SERVICES)
+            .setDefaultValue(new ModelNode(CommonAttributes.DEFAULT_CONTEXT_PATH))
+            .setValidator(new ModelTypeValidator(ModelType.STRING, true, false) {
+                @Override
+                public void validateParameter(String parameterName, ModelNode value) throws OperationFailedException {
+                    super.validateParameter(parameterName, value);
+                    if (value.isDefined()) {
+                        String path = value.asString();
+                        if (!path.startsWith("/")) {
+                            throw MicroProfileLRACoordinatorLogger.LOGGER.contextPathMustStartWithSlash(path);
+                        }
+                    }
+                }
+            })
+            .build();
+
+    static final AttributeDefinition[] ATTRIBUTES = {SERVER, HOST, CONTEXT_PATH};
 
     MicroProfileLRACoordinatorSubsystemDefinition() {
         super(new Parameters(PATH, RESOLVER)
@@ -72,6 +95,7 @@ public class MicroProfileLRACoordinatorSubsystemDefinition extends SimpleResourc
     public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
         resourceRegistration.registerReadWriteAttribute(SERVER, null, new ReloadRequiredWriteAttributeHandler(SERVER));
         resourceRegistration.registerReadWriteAttribute(HOST, null, new ReloadRequiredWriteAttributeHandler(HOST));
+        resourceRegistration.registerReadWriteAttribute(CONTEXT_PATH, null, new ReloadRequiredWriteAttributeHandler(CONTEXT_PATH));
     }
 
 }

@@ -16,15 +16,20 @@ import org.jboss.shrinkwrap.api.asset.EmptyAsset;
 import org.jboss.shrinkwrap.api.spec.WebArchive;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.wildfly.test.integration.microprofile.lra.EnableLRAExtensionsSetupTask;
+import org.wildfly.test.integration.microprofile.lra.EnableLRASetupTaskWithCustomContextPath;
 
 import java.net.URI;
 import java.net.URL;
 
+/**
+ * Tests that the LRA coordinator works correctly when deployed with {@code context-path="/"}.
+ * With this configuration the coordinator endpoint becomes available at
+ * {@code /lra-coordinator} instead of the default {@code /lra-coordinator/lra-coordinator}.
+ */
 @RunAsClient
 @RunWith(Arquillian.class)
-@ServerSetup(EnableLRAExtensionsSetupTask.class)
-public class LRAParticipantSmokeTestCase extends AbstractLRAParticipantTestCase {
+@ServerSetup(EnableLRASetupTaskWithCustomContextPath.class)
+public class LRACoordinatorContextPathTestCase extends AbstractLRAParticipantTestCase {
 
     @ArquillianResource
     public URL baseURL;
@@ -36,27 +41,25 @@ public class LRAParticipantSmokeTestCase extends AbstractLRAParticipantTestCase 
 
     @Override
     protected String getCoordinatorUrl() {
-        return "http://localhost:8080/lra-coordinator/lra-coordinator";
+        // With context-path="/", the coordinator URL drops one path segment
+        return "http://localhost:8080/lra-coordinator";
     }
 
     @Deployment
     public static WebArchive getDeployment() {
-
-        final WebArchive webArchive = ShrinkWrap.create(WebArchive.class, "lra-participant-test.war")
+        return ShrinkWrap.create(WebArchive.class, "lra-context-path-test.war")
             .addPackages(true,
                 "org.wildfly.test.integration.microprofile.lra.participant.smoke.hotel",
                 "org.wildfly.test.integration.microprofile.lra.participant.smoke.model")
-            .addClasses(LRAParticipantSmokeTestCase.class,
+            .addClasses(LRACoordinatorContextPathTestCase.class,
                 AbstractLRAParticipantTestCase.class,
-                EnableLRAExtensionsSetupTask.class,
+                EnableLRASetupTaskWithCustomContextPath.class,
                 CLIServerSetupTask.class)
             .addAsWebInfResource(EmptyAsset.INSTANCE, "beans.xml");
-
-        return webArchive;
     }
 
     @Test
-    public void hotelParticipantCompleteBookingTest() throws Exception {
+    public void testCoordinatorAtCustomContextPath() throws Exception {
         final URI lraId = startBooking();
         String id = getLRAUid(lraId.toString());
         closeLRA(id);
@@ -64,11 +67,10 @@ public class LRAParticipantSmokeTestCase extends AbstractLRAParticipantTestCase 
     }
 
     @Test
-    public void hotelParticipantCompensateBookingTest() throws Exception {
+    public void testCompensationAtCustomContextPath() throws Exception {
         final URI lraId = startBooking();
         String id = getLRAUid(lraId.toString());
         cancelLRA(id);
         validateBooking(false);
     }
-
 }

@@ -28,12 +28,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Supplier;
 
-import static org.wildfly.extension.microprofile.lra.coordinator.service.LRACoordinatorService.CONTEXT_PATH;
-
 public class LRARecoveryService implements Service {
     private static final Logger log = Logger.getLogger(LRARecoveryService.class);
 
     private final Supplier<ExecutorService> executorSupplier;
+    private final String contextPath;
 
     private volatile LRARecoveryModule lraRecoveryModule;
 
@@ -47,8 +46,9 @@ public class LRARecoveryService implements Service {
             { FailedLongRunningAction.getType().substring(1), FailedLongRunningAction.class.getName(),
                     LRAActionBean.class.getName() } };
 
-    public LRARecoveryService(Supplier<ExecutorService> executorSupplier) {
+    public LRARecoveryService(Supplier<ExecutorService> executorSupplier, String contextPath) {
         this.executorSupplier = executorSupplier;
+        this.contextPath = contextPath;
     }
 
     private void startRecoveryScan(final StartContext context) {
@@ -60,7 +60,7 @@ public class LRARecoveryService implements Service {
                 lraRecoveryModule.periodicWorkSecondPass();
                 context.complete();
             } catch (Exception e) {
-                MicroProfileLRACoordinatorLogger.LOGGER.failedToRunRecoveryScan(CONTEXT_PATH, e);
+                MicroProfileLRACoordinatorLogger.LOGGER.failedToRunRecoveryScan(contextPath, e);
             }
         };
         try {

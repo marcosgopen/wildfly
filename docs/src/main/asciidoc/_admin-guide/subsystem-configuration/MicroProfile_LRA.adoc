@@ -107,11 +107,23 @@ $ docker run -p 8080:8080 quay.io/jbosstm/lra-coordinator
 
 == Management model
 
-The `/subsystem=microprofile-lra-coordinator` resource defines two attributes:
+The `/subsystem=microprofile-lra-coordinator` resource defines the following attributes:
+
+* `server` - Represents the name of the Undertow subsystem 'server' resource that the LRA Coordinator is deployed to.
 
 * `host` - Represents the name of the Undertow subsystem 'host' resource that the LRA Coordinator is deployed to.
 
-* `server` - Represents the name of the Undertow subsystem 'server' resource that the LRA Coordinator is deployed to.
+* `context-path` - The context path at which the LRA coordinator is deployed. Defaults to `/lra-coordinator`. The Narayana coordinator appends its own internal resource path (`lra-coordinator`) under this context path, so the resulting endpoint URL depends on the configured value:
++
+[cols="1,2",options="header"]
+|===
+| `context-path` value | Coordinator endpoint URL
+| `/lra-coordinator` (default) | `\http://localhost:8080/lra-coordinator/lra-coordinator`
+| `/` | `\http://localhost:8080/lra-coordinator`
+| `/custom` | `\http://localhost:8080/custom/lra-coordinator`
+|===
++
+When changing this attribute, the `lra-coordinator-url` of any LRA participant subsystem must be updated to match the new endpoint URL.
 
 The `/subsystem=microprofile-lra-participant` resource defines one attribute:
 

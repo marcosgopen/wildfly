@@ -26,16 +26,17 @@ import java.util.function.Supplier;
 
 public final class LRACoordinatorService implements Service {
 
-    public static final String CONTEXT_PATH = "/lra-coordinator";
     private static final String DEPLOYMENT_NAME = "LRA Coordinator";
 
     private final Supplier<Host> undertow;
+    private final String contextPath;
 
     private volatile DeploymentManager deploymentManager = null;
     private volatile Deployment deployment = null;
 
-    public LRACoordinatorService(Supplier<Host> undertow) {
+    public LRACoordinatorService(Supplier<Host> undertow, String contextPath) {
         this.undertow = undertow;
+        this.contextPath = contextPath;
     }
 
     @Override
@@ -54,8 +55,8 @@ public final class LRACoordinatorService implements Service {
         final Map<String, String> initialParameters = new HashMap<>();
         initialParameters.put("jakarta.ws.rs.Application", LRACoordinatorApp.class.getName());
 
-        MicroProfileLRACoordinatorLogger.LOGGER.startingCoordinator(CONTEXT_PATH);
-        final DeploymentInfo coordinatorDeploymentInfo = getDeploymentInfo(DEPLOYMENT_NAME, CONTEXT_PATH, initialParameters);
+        MicroProfileLRACoordinatorLogger.LOGGER.startingCoordinator(contextPath);
+        final DeploymentInfo coordinatorDeploymentInfo = getDeploymentInfo(DEPLOYMENT_NAME, contextPath, initialParameters);
         deployServlet(coordinatorDeploymentInfo);
     }
 
@@ -98,7 +99,7 @@ public final class LRACoordinatorService implements Service {
             try {
                 deploymentManager.stop();
             } catch (ServletException e) {
-                MicroProfileLRACoordinatorLogger.LOGGER.failedStoppingCoordinator(CONTEXT_PATH, e);
+                MicroProfileLRACoordinatorLogger.LOGGER.failedStoppingCoordinator(contextPath, e);
             } finally {
                 deploymentManager.undeploy();
             }
