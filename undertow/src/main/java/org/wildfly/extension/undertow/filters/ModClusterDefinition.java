@@ -58,7 +58,7 @@ import org.wildfly.extension.undertow.Capabilities;
 import org.wildfly.extension.undertow.Constants;
 import org.wildfly.extension.undertow.PredicateValidator;
 import org.wildfly.extension.undertow.UndertowService;
-import org.wildfly.subsystem.resource.capability.CapabilityReferenceRecorder;
+import org.wildfly.subsystem.resource.capability.CapabilityReference;
 import org.wildfly.subsystem.service.ServiceDependency;
 import org.wildfly.subsystem.service.capture.ServiceValueExecutorRegistry;
 import org.wildfly.subsystem.service.capture.ServiceValueRegistry;
@@ -93,7 +93,7 @@ public class ModClusterDefinition extends AbstractFilterDefinition {
             .setAllowExpression(true)
             .setRequired(true)
             .addAccessConstraint(SensitiveTargetAccessConstraintDefinition.SOCKET_BINDING_REF)
-            .setCapabilityReference(CapabilityReferenceRecorder.builder(Capability.MOD_CLUSTER_FILTER_CAPABILITY.getDefinition(), SocketBinding.SERVICE_DESCRIPTOR).build())
+            .setCapabilityReference(CapabilityReference.builder(Capability.MOD_CLUSTER_FILTER_CAPABILITY.getDefinition(), SocketBinding.SERVICE_DESCRIPTOR).build())
             .setRestartAllServices()
             .build();
 
@@ -101,7 +101,7 @@ public class ModClusterDefinition extends AbstractFilterDefinition {
             .setAllowExpression(true)
             .setRequired(false)
             .addAccessConstraint(SensitiveTargetAccessConstraintDefinition.SOCKET_BINDING_REF)
-            .setCapabilityReference(CapabilityReferenceRecorder.builder(Capability.MOD_CLUSTER_FILTER_CAPABILITY.getDefinition(), SocketBinding.SERVICE_DESCRIPTOR).build())
+            .setCapabilityReference(CapabilityReference.builder(Capability.MOD_CLUSTER_FILTER_CAPABILITY.getDefinition(), SocketBinding.SERVICE_DESCRIPTOR).build())
             .setRestartAllServices()
             .build();
 
@@ -271,7 +271,7 @@ public class ModClusterDefinition extends AbstractFilterDefinition {
             .setRestartAllServices()
             .setAllowExpression(true)
             .setMeasurementUnit(MeasurementUnit.BYTES)
-            .setDefaultValue(new ModelNode(Http2Channel.DEFAULT_INITIAL_WINDOW_SIZE))
+            .setDefaultValue(new ModelNode(UndertowOptions.DEFAULT_HTTP2_SETTINGS_INITIAL_WINDOW_SIZE))
             .setValidator(new IntRangeValidator(1))
             .build();
 
@@ -354,7 +354,7 @@ public class ModClusterDefinition extends AbstractFilterDefinition {
             Predicate managementAccessPredicate = (managementAccessPredicateString != null) ? PredicateParser.parse(managementAccessPredicateString, this.getClass().getClassLoader()) : null;
 
             ModClusterServiceConfigurator configurator = new ModClusterServiceConfigurator(address);
-            configurator.configure(context, model).build(context.getServiceTarget()).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+            configurator.configure(context, model).build(context.getCapabilityServiceTarget()).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
 
             this.removers.put(address, this.registry.capture(ServiceDependency.on(configurator.getServiceName())).install(context));
 

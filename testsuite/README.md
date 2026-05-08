@@ -94,9 +94,9 @@ While these tests are only about functionality provided by the `wildfly-ee` feat
 |`-Djboss.home`| Path to a WildFly installation | If this property is set, the given path will be used as the location of the server installation to test, instead of using one created in the build. (**Note:** *This setting doesn't affect the servers that are directly provisioned by the testsuite itself using the wildfly-maven-plugin.*) |
 |`testsuite.default.build.project.prefix`| <empty>                        | Use the output of the `build` module as the source of installations not provisioned by the testsuite itself. This is the default behavior when testing  WildFly.                                                                                                                                |
 |`testsuite.default.build.project.prefix`| `ee-`                          | Use the output of the `ee-build` module as the source of installations not provisioned by the testsuite itself.  This is the default behavior when testing Red Hat JBoss EAP.                                                                                                                   |  
-|`testsuite.ee.galleon.pack.artifactId`| `wildfly-galleon-pack`         | When the testsuite provisions installations, it should use the `wildfly` feature pack.  This is the default behavior when testing  WildFly.                                                                                                                                                     |
-|`testsuite.ee.galleon.pack.artifactId`| `wildfly-ee-galleon-pack`      | When the testsuite provisions installations, it should use the `wildfly` feature pack. This is the default behavior when testing Red Hat JBoss EAP.                                                                                                                                             |
-|`testsuite.ee.galleon.pack.artifactId`| `wildfly-preview-feature-pack` | When the testsuite provisions installations, it should use the `wildfly` feature pack. This should only be used in combination with `-Dts.layers`.                                                                                                                                              |
+|`testsuite.ee.feature.pack.artifactId`| `wildfly-galleon-pack`         | When the testsuite provisions installations, it should use the `wildfly` feature pack.  This is the default behavior when testing  WildFly.                                                                                                                                                     |
+|`testsuite.ee.feature.pack.artifactId`| `wildfly-ee-galleon-pack`      | When the testsuite provisions installations, it should use the `wildfly` feature pack. This is the default behavior when testing Red Hat JBoss EAP.                                                                                                                                             |
+|`testsuite.ee.feature.pack.artifactId`| `wildfly-preview-feature-pack` | When the testsuite provisions installations, it should use the `wildfly` feature pack. This should only be used in combination with `-Dts.layers`.                                                                                                                                              |
 
 3.3 The expansion server tests
 -----------
@@ -133,11 +133,11 @@ There are a number of other profiles that can be activated to control how tests 
 3.5 Profiles for specific testsuite modules
 ---------------------
 
-For the `domain` and `integration` modules, there is a profile is named `X.module.profile` that can be is enabled by `-DX.module`
+For the `domain` and `integration` modules, there is a profile named `X.module.profile` that can be enabled by `-DX.module`
 
 For example, `integration.module.profile`, enabled by `-Dintegration.module`, enables the integration module.
 
-The integration module includes a number of child modules. For many of these, there is a profile is named `X.integration.tests.profile` which is enabled by `-DX.integration.tests`
+The integration module includes a number of child modules. For many of these, there is a profile named `X.integration.tests.profile` which is enabled by `-DX.integration.tests`
 - e.g.,  the clustering tests are defined in profile `clustering.integration.tests.profile`, enabled by `-Dclustering.integration.tests`
 
 Many individual modules can also be run by executing a profile by passing a property in the form `-Dts.X` where X is the name of the lowest level maven module that contains the tests. For example, `-Dts.domain` runs the tests in `testsuite/domain` while `-Dts.clustering` runs the tests in `testsuite/integration/clustering`.
@@ -237,4 +237,28 @@ The prototype also contains a profile which shows how the default database for W
 
 will run the tests using MySQL 5.1 instead of the default H2 database.
 
+8.0 Changing the container images used in integration tests
+------------------------
 
+In integrations tests, we use the following images:
+
+* otel/opentelemetry-collector
+* docker.elastic.co/elasticsearch/elasticsearch
+* apache/james
+* apache/kafka-native
+* quay.io/arkmq-org/activemq-artemis-broker
+* quay.io/keycloak/keycloak
+
+It is possible to override the default images and versions by using:
+
+* System properties, e.g. `-Dtestsuite.kafka-native.image=apache/kafka-native:3.9.0`
+* Environment variables, e.g. `AS_TS_KAFKA_NATIVE_IMAGE=apache/kafka-native:3.9.0`
+* Properties file specified via `testsuite.config.properties` system property or `TESTSUITE_CONFIG_PROPERTIES` environment variable, e.g. `-Dtestsuite.config.properties=/path/to/testsuite-config.properties` or `TESTSUITE_CONFIG_PROPERTIES=/path/to/testsuite-config.properties`; the properties file format has to be the same as for System properties e.g.:
+     ```properties
+     testsuite.opentelemetry-collector.image=otel/opentelemetry-collector:0.115.1
+     testsuite.elasticsearch.image=docker.elastic.co/elasticsearch/elasticsearch:8.15.4
+     testsuite.mailserver.image=apache/james:demo-3.8.2
+     testsuite.kafka-native.image=apache/kafka-native:3.8.0
+     testsuite.activemq-artemis-broker.image=quay.io/arkmq-org/activemq-artemis-broker:artemis.2.42.0
+     testsuite.keycloak.image=quay.io/keycloak/keycloak:24.0.2
+     ```

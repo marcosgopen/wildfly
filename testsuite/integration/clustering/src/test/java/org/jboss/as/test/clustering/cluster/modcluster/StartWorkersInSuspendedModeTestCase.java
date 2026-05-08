@@ -11,15 +11,16 @@ import static org.jboss.as.controller.client.helpers.ClientConstants.READ_RESOUR
 import static org.jboss.as.controller.client.helpers.ClientConstants.RECURSIVE;
 import static org.jboss.as.controller.client.helpers.ClientConstants.STATUS;
 import static org.jboss.as.controller.client.helpers.ClientConstants.SUCCESS;
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RESULT;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.*;
 import static org.jboss.as.test.integration.management.util.ModelUtil.createOpNode;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Set;
 
 import org.jboss.arquillian.container.test.api.Deployment;
 import org.jboss.arquillian.container.test.api.RunAsClient;
 import org.jboss.arquillian.container.test.api.TargetsContainer;
-import org.jboss.arquillian.junit.Arquillian;
+import org.jboss.arquillian.junit5.ArquillianExtension;
 import org.jboss.as.arquillian.api.ServerSetup;
 import org.jboss.as.controller.client.ModelControllerClient;
 import org.jboss.as.test.clustering.cluster.AbstractClusteringTestCase;
@@ -30,9 +31,8 @@ import org.jboss.dmr.ModelNode;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.asset.StringAsset;
 import org.jboss.shrinkwrap.api.spec.WebArchive;
-import org.junit.Assert;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 /**
  * Verifies behavior of mod_cluster interaction when a worker node is started in suspended mode.
@@ -41,7 +41,7 @@ import org.junit.runner.RunWith;
  * @author Radoslav Husar
  */
 @RunAsClient
-@RunWith(Arquillian.class)
+@ExtendWith(ArquillianExtension.class)
 @ServerSetup(StartWorkersInSuspendedModeTestCase.ServerSetupTask.class)
 public class StartWorkersInSuspendedModeTestCase extends AbstractClusteringTestCase {
 
@@ -63,7 +63,7 @@ public class StartWorkersInSuspendedModeTestCase extends AbstractClusteringTestC
     }
 
     @Test
-    public void testWorkerNodeIsRegisteredStopped() throws Exception {
+    void workerNodeIsRegisteredStopped() throws Exception {
         ServerReload.executeReloadAndWaitForCompletion(TestSuiteEnvironment.getModelControllerClient(), ServerReload.TIMEOUT,
                                                        false, true,
                                                        null,
@@ -95,8 +95,8 @@ public class StartWorkersInSuspendedModeTestCase extends AbstractClusteringTestC
             Thread.sleep(100);
         }
 
-        Assert.assertEquals(SUCCESS, modelNode.get(OUTCOME).asString());
-        Assert.assertEquals("stopped", modelNode.get(RESULT).get(STATUS).asString());
+        assertEquals(SUCCESS, modelNode.get(OUTCOME).asString());
+        assertEquals("stopped", modelNode.get(RESULT).get(STATUS).asString());
     }
 
     static class ServerSetupTask extends ManagementServerSetupTask {
@@ -107,14 +107,6 @@ public class StartWorkersInSuspendedModeTestCase extends AbstractClusteringTestC
                             .add("/subsystem=modcluster/proxy=default:write-attribute(name=advertise, value=false)")
                             .add("/socket-binding-group=standard-sockets/remote-destination-outbound-socket-binding=proxy1:add(host=localhost, port=8590)")
                             .add("/subsystem=modcluster/proxy=default:list-add(name=proxies, value=proxy1)")
-                            .endBatch()
-                            .build()
-                    )
-                    .tearDownScript(createScriptBuilder()
-                            .startBatch()
-                            .add("/subsystem=modcluster/proxy=default:list-remove(name=proxies, value=proxy1)")
-                            .add("/socket-binding-group=standard-sockets/remote-destination-outbound-socket-binding=proxy1:remove")
-                            .add("/subsystem=modcluster/proxy=default:write-attribute(name=advertise, value=true)")
                             .endBatch()
                             .build())
                     .build()

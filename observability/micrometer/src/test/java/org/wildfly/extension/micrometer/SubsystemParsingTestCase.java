@@ -23,7 +23,6 @@ public class SubsystemParsingTestCase extends AbstractSubsystemSchemaTest<Microm
     }
 
     public SubsystemParsingTestCase(MicrometerSubsystemSchema schema) {
-        super(MicrometerConfigurationConstants.NAME, new MicrometerExtension(), schema,
-            MicrometerSubsystemSchema.VERSION_2_0_COMMUNITY);
+        super(MicrometerConfigurationConstants.NAME, new MicrometerExtension(), schema, MicrometerSubsystemSchema.CURRENT);
     }
 }

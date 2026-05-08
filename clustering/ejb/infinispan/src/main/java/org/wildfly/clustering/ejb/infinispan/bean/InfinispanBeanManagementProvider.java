@@ -4,9 +4,12 @@
  */
 package org.wildfly.clustering.ejb.infinispan.bean;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.function.IntSupplier;
 
 import org.infinispan.Cache;
 import org.infinispan.configuration.cache.ConfigurationBuilder;
@@ -27,14 +30,12 @@ import org.wildfly.clustering.ejb.bean.BeanInstance;
 import org.wildfly.clustering.ejb.bean.BeanManagementConfiguration;
 import org.wildfly.clustering.ejb.bean.BeanManagementProvider;
 import org.wildfly.clustering.ejb.bean.BeanManagerFactory;
-import org.wildfly.clustering.ejb.bean.BeanPassivationConfiguration;
 import org.wildfly.clustering.ejb.cache.bean.BeanGroupManager;
 import org.wildfly.clustering.ejb.cache.bean.DefaultBeanGroupManager;
 import org.wildfly.clustering.ejb.cache.bean.DefaultBeanGroupManagerConfiguration;
 import org.wildfly.clustering.ejb.infinispan.logging.InfinispanEjbLogger;
 import org.wildfly.clustering.infinispan.service.CacheConfigurationServiceInstaller;
 import org.wildfly.clustering.infinispan.service.CacheServiceInstaller;
-import org.wildfly.clustering.function.Consumer;
 import org.wildfly.clustering.function.Supplier;
 import org.wildfly.clustering.function.UnaryOperator;
 import org.wildfly.clustering.infinispan.service.InfinispanServiceDescriptor;
@@ -42,11 +43,11 @@ import org.wildfly.clustering.marshalling.ByteBufferMarshalledValueFactory;
 import org.wildfly.clustering.marshalling.ByteBufferMarshaller;
 import org.wildfly.clustering.marshalling.MarshalledValue;
 import org.wildfly.clustering.marshalling.MarshalledValueFactory;
-import org.wildfly.clustering.server.Registration;
+import org.wildfly.clustering.server.eviction.EvictionConfiguration;
 import org.wildfly.clustering.server.infinispan.dispatcher.CacheContainerCommandDispatcherFactory;
 import org.wildfly.clustering.server.service.BinaryServiceConfiguration;
 import org.wildfly.clustering.server.service.ClusteringServiceDescriptor;
-import org.wildfly.service.Installer.StartWhen;
+import org.wildfly.service.BlockingLifecycle;
 import org.wildfly.subsystem.service.ServiceDependency;
 import org.wildfly.subsystem.service.ServiceInstaller;
 
@@ -123,21 +124,21 @@ public class InfinispanBeanManagementProvider<K, V extends BeanInstance<K>> impl
             }
         };
         ServiceName groupManagerServiceName = this.getGroupManagerServiceName(deploymentConfiguration);
-        ServiceInstaller groupManagerInstaller = ServiceInstaller.builder(groupFactory)
+        ServiceInstaller groupManagerInstaller = ServiceInstaller.BlockingBuilder.of(groupFactory)
                 .provides(groupManagerServiceName)
                 .requires(cache)
                 .build();
 
-        Supplier<Registration> groupListener = new Supplier<>() {
+        Supplier<BeanPassivationManager> groupListener = new Supplier<>() {
             @Override
-            public Registration get() {
-                return new InfinispanBeanGroupListener<>(cacheConfiguration, marshaller);
+            public BeanPassivationManager get() {
+                return new InfinispanBeanPassivationManager<>(cacheConfiguration, marshaller);
             }
         };
-        ServiceInstaller groupListenerInstaller = ServiceInstaller.builder(groupListener)
-                .onStop(Consumer.close())
+        ServiceInstaller groupListenerInstaller = ServiceInstaller.BlockingBuilder.of(groupListener)
+                .provides(this.getPassivationManagerServiceName(deploymentConfiguration))
+                .withLifecycle(BlockingLifecycle.autoClose())
                 .requires(ServiceDependency.on(groupManagerServiceName))
-                .startWhen(StartWhen.AVAILABLE)
                 .build();
 
         return List.of(cacheConfigurationInstaller, cacheInstaller, groupManagerInstaller, groupListenerInstaller);
@@ -149,6 +150,7 @@ public class InfinispanBeanManagementProvider<K, V extends BeanInstance<K>> impl
         ServiceDependency<Cache<?, ?>> cache = deploymentCacheConfiguration.getServiceDependency(InfinispanServiceDescriptor.CACHE);
         ServiceDependency<CacheContainerCommandDispatcherFactory> dispatcherFactory = deploymentCacheConfiguration.getServiceDependency(ClusteringServiceDescriptor.COMMAND_DISPATCHER_FACTORY).map(CacheContainerCommandDispatcherFactory.class::cast);
         ServiceDependency<BeanGroupManager<K, V>> beanGroupManager = ServiceDependency.on(this.getGroupManagerServiceName(beanConfiguration));
+        ServiceDependency<BeanPassivationManager> listener = ServiceDependency.on(this.getPassivationManagerServiceName(beanConfiguration));
         InfinispanBeanManagerFactoryConfiguration<K, V> configuration = new InfinispanBeanManagerFactoryConfiguration<>() {
             @Override
             public BeanConfiguration getBeanConfiguration() {
@@ -162,8 +164,13 @@ public class InfinispanBeanManagementProvider<K, V extends BeanInstance<K>> impl
             }
 
             @Override
-            public BeanPassivationConfiguration getPassivationConfiguration() {
+            public EvictionConfiguration getPassivationConfiguration() {
                 return InfinispanBeanManagementProvider.this.configuration;
+            }
+
+            @Override
+            public IntSupplier getPassivations() {
+                return Supplier.of(beanConfiguration.getName()).thenApplyAsInt(listener.get());
             }
 
             @Override
@@ -176,14 +183,18 @@ public class InfinispanBeanManagementProvider<K, V extends BeanInstance<K>> impl
                 return beanGroupManager.get();
             }
         };
-        return ServiceInstaller.builder(Supplier.of(new InfinispanBeanManagerFactory<>(configuration)))
+        return ServiceInstaller.BlockingBuilder.of(Supplier.of(new InfinispanBeanManagerFactory<>(configuration)))
                 .provides(name)
-                .requires(List.of(cache, dispatcherFactory, beanGroupManager))
+                .requires(List.of(cache, dispatcherFactory, beanGroupManager, listener))
                 .build();
     }
 
     private ServiceName getGroupManagerServiceName(DeploymentConfiguration config) {
         return config.getDeploymentServiceName().append(this.name, "bean-group");
+    }
+
+    private ServiceName getPassivationManagerServiceName(DeploymentConfiguration config) {
+        return config.getDeploymentServiceName().append(this.name, "passivation");
     }
 
     @Override
@@ -195,13 +206,22 @@ public class InfinispanBeanManagementProvider<K, V extends BeanInstance<K>> impl
             InfinispanEjbLogger.ROOT_LOGGER.expirationDisabled(InfinispanBeanManagementProvider.this.cacheConfiguration.getChildName());
         }
 
-        OptionalInt size = InfinispanBeanManagementProvider.this.configuration.getMaxActiveBeans();
-        EvictionStrategy strategy = size.isPresent() ? EvictionStrategy.REMOVE : EvictionStrategy.MANUAL;
-        builder.memory().storage(StorageType.HEAP).whenFull(strategy).maxCount(size.orElse(0));
+        OptionalInt size = InfinispanBeanManagementProvider.this.configuration.getSizeThreshold();
+        Optional<Duration> idleThreshold = InfinispanBeanManagementProvider.this.configuration.getIdleThreshold();
+
+        EvictionStrategy strategy = (size.isPresent() || idleThreshold.isPresent()) ? EvictionStrategy.REMOVE : EvictionStrategy.MANUAL;
+        builder.memory().storage(StorageType.HEAP).whenFull(strategy);
         if (strategy.isEnabled()) {
+            // When an idle-timeout is configured without a size threshold, the cache's size limit must still be configured due to Infinispan's requirements.
+            // As a workaround we explicitly set maxCount(..) to Integer.MAX_VALUE.
+            // This in effect ensures that eviction is governed solely by idleness rather than hitting of the size constraint.
+            int maxCount = size.orElse(Integer.MAX_VALUE);
+            builder.memory().maxCount(maxCount);
             // Only evict bean group entries
             // We will cascade eviction to the associated beans
-            builder.addModule(DataContainerConfigurationBuilder.class).evictable(InfinispanBeanGroupKey.class::isInstance);
+            DataContainerConfigurationBuilder container = builder.addModule(DataContainerConfigurationBuilder.class);
+            container.evictable(InfinispanBeanGroupKey.class::isInstance);
+            idleThreshold.ifPresent(container::idleTimeout);
         }
         return builder;
     }

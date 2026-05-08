@@ -16,7 +16,7 @@
         Maintain separation between the artifact id and the version to help prevent
         merge conflicts between commits changing the GA and those changing the V.
         -->
-        <version>38.0.0.Beta1-SNAPSHOT</version>
+        <version>40.0.0.Final-SNAPSHOT</version>
     </parent>
 
     <!-- ********************************************************************************** -->
@@ -68,16 +68,15 @@
             <artifactId>undertow-core</artifactId>
             <scope>test</scope>
         </dependency>
-
         <dependency>
-            <groupId>io.undertow</groupId>
+            <groupId>io.undertow.ee</groupId>
             <artifactId>undertow-servlet</artifactId>
             <scope>test</scope>
         </dependency>
 
         <dependency>
-            <groupId>io.undertow</groupId>
-            <artifactId>undertow-websockets-jsr</artifactId>
+            <groupId>io.undertow.ee</groupId>
+            <artifactId>undertow-websockets</artifactId>
             <scope>test</scope>
         </dependency>
 
@@ -337,13 +336,6 @@
                 <groupId>org.wildfly.glow</groupId>
                 <artifactId>wildfly-glow-arquillian-plugin</artifactId>
                 <configuration>
-                    <feature-packs>
-                        <feature-pack>
-                            <groupId>${testsuite.ee.galleon.pack.groupId}</groupId>
-                            <artifactId>${testsuite.ee.galleon.pack.artifactId}</artifactId>
-                            <version>${testsuite.ee.galleon.pack.version}</version>
-                        </feature-pack>
-                    </feature-packs>
                     <config-name>standalone.xml</config-name>
                     <add-ons>
                         <add-on>ssl</add-on>
@@ -792,6 +784,28 @@
                     </plugin>
                 </plugins>
             </build>
+        </profile>
+
+        <!-- Some deps need to differ based on whether we are testing EE 10 or EE 11+ -->
+        <profile>
+            <id>ee-11-deps</id>
+            <activation>
+                <property>
+                    <name>preview-server-tests</name>
+                </property>
+            </activation>
+            <dependencies>
+            </dependencies>
+            </profile>
+        <profile>
+            <id>ee-10-deps</id>
+            <activation>
+                <property>
+                    <name>!preview-server-tests</name>
+                </property>
+            </activation>
+            <dependencies>
+            </dependencies>
         </profile>
 
     </profiles>

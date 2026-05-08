@@ -13,22 +13,27 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.ServiceLoader;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
-import java.util.function.Supplier;
-import java.util.function.UnaryOperator;
+import java.util.concurrent.Executor;
 
 import jakarta.servlet.ServletContext;
 
 import io.undertow.security.api.AuthenticatedSessionManager.AuthenticatedSession;
+import io.undertow.servlet.api.Deployment;
 import io.undertow.servlet.util.SavedRequest;
 
+import org.jboss.as.controller.management.Capabilities;
 import org.jboss.as.server.deployment.Attachments;
 import org.jboss.as.server.deployment.DeploymentUnit;
+import org.jboss.as.server.suspend.SuspendPriority;
+import org.jboss.as.server.suspend.SuspendableActivityRegistrar;
 import org.jboss.as.web.common.WarMetaData;
 import org.jboss.metadata.web.jboss.JBossWebMetaData;
 import org.jboss.metadata.web.jboss.ReplicationConfig;
 import org.jboss.modules.Module;
 import org.kohsuke.MetaInfServices;
+import org.wildfly.clustering.function.Function;
+import org.wildfly.clustering.function.Supplier;
+import org.wildfly.clustering.function.UnaryOperator;
 import org.wildfly.clustering.marshalling.ByteBufferMarshaller;
 import org.wildfly.clustering.server.immutable.Immutability;
 import org.wildfly.clustering.session.SessionAttributePersistenceStrategy;
@@ -44,9 +49,12 @@ import org.wildfly.clustering.web.undertow.logging.UndertowClusteringLogger;
 import org.wildfly.elytron.web.undertow.server.servlet.ServletSecurityContextImpl.IdentityContainer;
 import org.wildfly.extension.undertow.session.SessionAffinityProvider;
 import org.wildfly.security.cache.CachedIdentity;
+import org.wildfly.service.BlockingLifecycle;
+import org.wildfly.service.NonBlockingLifecycle;
 import org.wildfly.subsystem.service.DeploymentServiceInstaller;
 import org.wildfly.subsystem.service.ServiceDependency;
 import org.wildfly.subsystem.service.ServiceInstaller;
+import org.wildfly.subsystem.service.SuspendableNonBlockingLifecycle;
 
 /**
  * {@link SessionManagementProvider} for Undertow.
@@ -75,16 +83,23 @@ public class DistributableWebDeploymentServiceInstallerProvider implements WebDe
         Immutability immutability = Immutability.classes(immutableClasses);
         DeploymentServiceInstaller providedInstaller = provider.getSessionManagerFactoryServiceInstaller(new SessionManagerFactoryConfigurationAdapter<>(configuration, provider.getSessionManagementConfiguration(), immutability));
 
-        Function<SessionManagerFactory<ServletContext, Map<String, Object>>, io.undertow.servlet.api.SessionManagerFactory> mapper = new Function<>() {
+        ServiceDependency<SuspendableActivityRegistrar> activityRegistry = ServiceDependency.on(SuspendableActivityRegistrar.SERVICE_DESCRIPTOR);
+        ServiceDependency<Executor> executor = ServiceDependency.on(Capabilities.MANAGEMENT_EXECUTOR);
+        ServiceDependency<io.undertow.servlet.api.SessionManagerFactory> factory = ServiceDependency.<SessionManagerFactory<ServletContext, Map<String, Object>>>on(WebDeploymentServiceDescriptor.SESSION_MANAGER_FACTORY.resolve(unit)).map(new Function<>() {
             @Override
             public io.undertow.servlet.api.SessionManagerFactory apply(SessionManagerFactory<ServletContext, Map<String, Object>> factory) {
-                return new DistributableSessionManagerFactory(factory, configuration);
+                return new DistributableSessionManagerFactory(factory, configuration) {
+                    @Override
+                    public UndertowSessionManager createSessionManager(Deployment deployment) {
+                        UndertowSessionManager manager = super.createSessionManager(deployment);
+                        return new DecoratedSessionManager(manager, BlockingLifecycle.join(new SuspendableNonBlockingLifecycle(NonBlockingLifecycle.async(manager, executor.get()), activityRegistry.get(), SuspendPriority.DEFAULT)));
+                    }
+                };
             }
-        };
-        ServiceDependency<SessionManagerFactory<ServletContext, Map<String, Object>>> factory = ServiceDependency.on(WebDeploymentServiceDescriptor.SESSION_MANAGER_FACTORY.resolve(unit));
-        DeploymentServiceInstaller installer = ServiceInstaller.builder(mapper, factory)
+        });
+        DeploymentServiceInstaller installer = ServiceInstaller.BlockingBuilder.of(factory)
                 .provides(org.wildfly.extension.undertow.deployment.WebDeploymentServiceDescriptor.SESSION_MANAGER_FACTORY.resolve(unit))
-                .requires(factory)
+                .requires(List.of(activityRegistry, executor))
                 .build();
 
         return DeploymentServiceInstaller.combine(providedInstaller, installer);
@@ -97,10 +112,8 @@ public class DistributableWebDeploymentServiceInstallerProvider implements WebDe
 
         DeploymentServiceInstaller locatorInstaller = provider.getRouteLocatorServiceInstaller(new WebDeploymentConfigurationAdapter(configuration));
         ServiceDependency<UnaryOperator<String>> locator = ServiceDependency.on(WebDeploymentServiceDescriptor.ROUTE_LOCATOR.resolve(configuration.getDeploymentUnit()));
-        Supplier<SessionAffinityProvider> factory = locator.map(SessionAffinityProviderAdapter::new);
-        DeploymentServiceInstaller affinityInstaller = ServiceInstaller.builder(factory)
+        DeploymentServiceInstaller affinityInstaller = ServiceInstaller.BlockingBuilder.of(locator.map(SessionAffinityProviderAdapter::new))
                 .provides(org.wildfly.extension.undertow.deployment.WebDeploymentServiceDescriptor.SESSION_AFFINITY_PROVIDER.resolve(unit))
-                .requires(locator)
                 .build();
         return DeploymentServiceInstaller.combine(locatorInstaller, affinityInstaller);
     }
@@ -167,7 +180,7 @@ public class DistributableWebDeploymentServiceInstallerProvider implements WebDe
         }
 
         @Override
-        public OptionalInt getMaxActiveSessions() {
+        public OptionalInt getSizeThreshold() {
             return this.maxActiveSessions;
         }
 

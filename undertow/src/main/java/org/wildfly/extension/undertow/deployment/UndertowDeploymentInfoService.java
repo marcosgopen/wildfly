@@ -146,6 +146,7 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 
 import static io.undertow.servlet.api.SecurityInfo.EmptyRoleSemantic.AUTHENTICATE;
 import static io.undertow.servlet.api.SecurityInfo.EmptyRoleSemantic.DENY;
@@ -275,7 +276,6 @@ public class UndertowDeploymentInfoService implements Service<DeploymentInfo> {
 
             deploymentInfo.setConfidentialPortManager(getConfidentialPortManager());
 
-            handleDistributable(deploymentInfo);
             if (!isElytronActive()) {
                 if (securityDomain != null || mergedMetaData.isUseJBossAuthorization()) {
                     throw UndertowLogger.ROOT_LOGGER.legacySecurityUnsupported();
@@ -395,11 +395,6 @@ public class UndertowDeploymentInfoService implements Service<DeploymentInfo> {
                 deploymentInfo.setMetricsCollector(new UndertowMetricsCollector());
             }
 
-            ControlPoint controlPoint = (this.controlPoint != null) ? this.controlPoint.get() : null;
-            if (controlPoint != null) {
-                new SuspendedServerHandlerWrapper(controlPoint, this.allowSuspendedRequests).apply(deploymentInfo);
-            }
-
             deploymentInfoConsumer.accept(this.deploymentInfo = deploymentInfo);
         } finally {
             Thread.currentThread().setContextClassLoader(oldTccl);
@@ -458,25 +453,24 @@ public class UndertowDeploymentInfoService implements Service<DeploymentInfo> {
         };
     }
 
-    private void handleDistributable(final DeploymentInfo deploymentInfo) {
+    private DeploymentInfo createDeploymentInfo() {
+        DeploymentInfo deployment = new DeploymentInfo();
+
         SessionManagerFactory managerFactory = this.sessionManagerFactory != null ? this.sessionManagerFactory.get() : null;
         if (managerFactory != null) {
-            deploymentInfo.setSessionManagerFactory(managerFactory);
+            deployment.setSessionManagerFactory(managerFactory);
         }
 
         SessionAffinityProvider sessionAffinityProvider = this.sessionAffinityProvider != null ? this.sessionAffinityProvider.get() : null;
         if (sessionAffinityProvider != null) {
             CookieConfig config = this.container.get().getAffinityCookieConfig();
             SessionConfigWrapper wrapper = (config != null) ? new AffinitySessionConfigWrapper(config, sessionAffinityProvider) : new CodecSessionConfigWrapper(new AffinitySessionIdentifierCodec(sessionAffinityProvider));
-            deploymentInfo.setSessionConfigWrapper(wrapper);
+            deployment.setSessionConfigWrapper(wrapper);
         }
-    }
 
-    private DeploymentInfo createDeploymentInfo() {
-        DeploymentInfo deployment = new DeploymentInfo();
-        ControlPoint controlPoint = this.controlPoint != null ? this.controlPoint.get() : null;
-        // GlobalRequestControllerListener must be registered before any application listeners
-        return (controlPoint != null) ? new SuspendedServerRequestListener(controlPoint).apply(deployment) : deployment;
+        UnaryOperator<DeploymentInfo> decorator = this.controlPoint != null ? new ControlPointDeploymentInfoConfigurator(this.controlPoint.get(), this.allowSuspendedRequests) : UnaryOperator.identity();
+
+        return decorator.apply(deployment);
     }
 
     private DeploymentInfo createServletConfig() throws StartException {
@@ -1181,7 +1175,8 @@ public class UndertowDeploymentInfoService implements Service<DeploymentInfo> {
             authenticationManager.configure(deploymentInfo);
         }
 
-        deploymentInfo.addOuterHandlerChainWrapper(JACCContextIdHandler.wrapper(jaccContextId));
+        deploymentInfo.addThreadSetupAction(JACCContextIdHandler.threadSetupHandler(jaccContextId));
+        deploymentInfo.addOuterHandlerChainWrapper(JACCContextIdHandler.handlerWrapper(jaccContextId));
         if(mergedMetaData.isUseJBossAuthorization()) {
             UndertowLogger.ROOT_LOGGER.configurationOptionIgnoredWhenUsingElytron("use-jboss-authorization");
         }

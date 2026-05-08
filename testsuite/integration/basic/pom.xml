@@ -16,7 +16,7 @@
         Maintain separation between the artifact id and the version to help prevent
         merge conflicts between commits changing the GA and those changing the V.
         -->
-        <version>38.0.0.Beta1-SNAPSHOT</version>
+        <version>40.0.0.Final-SNAPSHOT</version>
     </parent>
 
     <!-- ********************************************************************************** -->
@@ -57,7 +57,6 @@
         <surefire.default-test.phase>none</surefire.default-test.phase>
 
         <modular.jdk.testsuite.args>${modular.jdk.args} --add-opens=java.base/javax.crypto=ALL-UNNAMED --add-opens=java.base/sun.security.validator=ALL-UNNAMED --add-opens=java.base/sun.security.x509=ALL-UNNAMED --add-opens=java.base/sun.security.util=ALL-UNNAMED  --add-opens=java.xml/com.sun.org.apache.xalan.internal.xsltc.trax=ALL-UNNAMED</modular.jdk.testsuite.args>
-
     </properties>
 
     <dependencies>
@@ -82,13 +81,13 @@
             <artifactId>undertow-core</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.undertow</groupId>
+            <groupId>io.undertow.ee</groupId>
             <artifactId>undertow-servlet</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>io.undertow</groupId>
-            <artifactId>undertow-websockets-jsr</artifactId>
+            <groupId>io.undertow.ee</groupId>
+            <artifactId>undertow-websockets</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -152,11 +151,6 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>jakarta.mvc</groupId>
-            <artifactId>jakarta.mvc-api</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>jakarta.persistence</groupId>
             <artifactId>jakarta.persistence-api</artifactId>
             <scope>test</scope>
@@ -212,11 +206,6 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.eclipse.krazo</groupId>
-            <artifactId>krazo-core</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>org.jboss.spec.jakarta.xml.ws</groupId>
             <artifactId>jboss-jakarta-xml-ws-api_4.0_spec</artifactId>
             <scope>test</scope>
@@ -243,12 +232,12 @@
             </exclusions>
         </dependency>
         <dependency>
-            <groupId>org.apache.activemq</groupId>
+            <groupId>org.apache.artemis</groupId>
             <artifactId>artemis-core-client</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.apache.activemq</groupId>
+            <groupId>org.apache.artemis</groupId>
             <artifactId>artemis-jakarta-client</artifactId>
             <scope>test</scope>
         </dependency>
@@ -322,6 +311,11 @@
         <dependency>
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>commons-beanutils</groupId>
+            <artifactId>commons-beanutils</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -542,6 +536,11 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>org.jgroups</groupId>
+            <artifactId>jgroups</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.jsoup</groupId>
             <artifactId>jsoup</artifactId>
             <scope>test</scope>
@@ -657,22 +656,22 @@
         </dependency>
         <!-- To be able to start a 'remote' broker -->
         <dependency>
-            <groupId>org.apache.activemq</groupId>
+            <groupId>org.apache.artemis</groupId>
             <artifactId>artemis-jakarta-server</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.apache.activemq</groupId>
+            <groupId>org.apache.artemis</groupId>
             <artifactId>artemis-server</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.apache.activemq</groupId>
+            <groupId>org.apache.artemis</groupId>
             <artifactId>artemis-commons</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.apache.activemq</groupId>
+            <groupId>org.apache.artemis</groupId>
             <artifactId>artemis-journal</artifactId>
             <scope>test</scope>
         </dependency>
@@ -682,17 +681,17 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.apache.activemq</groupId>
+            <groupId>org.apache.artemis</groupId>
             <artifactId>artemis-jakarta-ra</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.apache.activemq</groupId>
+            <groupId>org.apache.artemis</groupId>
             <artifactId>artemis-selector</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.apache.activemq</groupId>
+            <groupId>org.apache.artemis</groupId>
             <artifactId>artemis-jakarta-service-extensions</artifactId>
             <scope>test</scope>
         </dependency>
@@ -768,7 +767,7 @@
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>elasticsearch</artifactId>
+            <artifactId>testcontainers-elasticsearch</artifactId>
             <scope>test</scope>
         </dependency>
 
@@ -836,11 +835,6 @@
             <artifactId>wsdl4j</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.jboss.spec.jakarta.el</groupId>
-            <artifactId>jboss-el-api_5.0_spec</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>jakarta.servlet.jsp</groupId>
             <artifactId>jakarta.servlet.jsp-api</artifactId>
             <scope>test</scope>
@@ -848,6 +842,11 @@
         <dependency>
             <groupId>org.kohsuke.metainf-services</groupId>
             <artifactId>metainf-services</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -910,6 +909,15 @@
                                     <destFileName>hibernate-search-v5migrationhelper-orm.jar</destFileName>
                                 </artifactItem>
                             </artifactItems>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <goals>
+                            <goal>build-classpath</goal>
+                        </goals>
+                        <configuration>
+                            <includeArtifactIds>h2</includeArtifactIds>
+                            <outputFile>${project.build.directory}/h2.version</outputFile>
                         </configuration>
                     </execution>
                 </executions>
@@ -1198,12 +1206,7 @@
                 <groupId>org.wildfly.glow</groupId>
                 <artifactId>wildfly-glow-arquillian-plugin</artifactId>
                 <configuration>
-                    <feature-packs>
-                        <feature-pack>
-                            <groupId>${testsuite.ee.galleon.pack.groupId}</groupId>
-                            <artifactId>${testsuite.ee.galleon.pack.artifactId}</artifactId>
-                            <version>${testsuite.ee.galleon.pack.version}</version>
-                        </feature-pack>
+                    <feature-packs combine.children="append">
                         <feature-pack>
                             <groupId>${project.groupId}</groupId>
                             <artifactId>${testsuite.test.feature.pack.artifactId}</artifactId>
@@ -1322,7 +1325,7 @@
                             <expected-errors>
                                 <error>jakarta.naming.Context or InitialContext lookup. Enable verbose output to see the locations.</error>
                             </expected-errors>
-                            <expected-discovery>[ee-concurrency, ee-integration, ejb-lite, naming, transactions]==>ee-core-profile-server,ejb-lite</expected-discovery>
+                            <expected-discovery>[cdi, ee-concurrency, ee-integration, ejb-lite, naming, transactions]==>ee-core-profile-server,ejb-lite</expected-discovery>
                             <surefire-execution-for-included-classes>ee-concurrency-layers.surefire</surefire-execution-for-included-classes>
                         </configuration>
                     </execution>
@@ -3212,6 +3215,7 @@
                                         <!-- exclude tests sending messages -->
                                         <exclude>org/jboss/as/test/integration/messaging/jms/localtransaction/LocalTransactionTestCase.java</exclude>
                                         <exclude>org/jboss/as/test/integration/messaging/jms/naming/JndiLookupMessagingDeploymentTestCase.java</exclude>
+                                        <exclude>org/jboss/as/test/integration/messaging/jms/deployment/SingleConnectionActivationPropertyTestCase.java</exclude>
                                     </excludes>
                                     <!-- Starting and stopping the remote broker -->
                                     <properties>
@@ -3755,22 +3759,40 @@
                 </plugins>
             </build>
         </profile>
-        <!-- Profile that can be activated in combination with -Dts.layers and -Dts.galleon
-             to execute the tests activated by those profiles, but using the wildfly-preview feature pack
-             based variant of wildfly-test-galleon-pack.
-        -->
+        <!-- Dependencies only to be used when not testing installations using the legacy EE FP -->
         <profile>
-            <id>test.feature.pack.preview.profile</id>
+            <id>standard-ee-tests-deps</id>
             <activation>
                 <property>
-                    <name>testsuite.ee.galleon.pack.artifactId</name>
-                    <value>wildfly-preview-feature-pack</value>
+                    <name>!legacy-ee-tests</name>
                 </property>
             </activation>
             <dependencies>
                 <dependency>
                     <groupId>jakarta.enterprise</groupId>
                     <artifactId>jakarta.enterprise.cdi-el-api</artifactId>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.jboss.spec.jakarta.el</groupId>
+                    <artifactId>jakarta.el-api</artifactId>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+        <!-- Dependencies only to be used when testing installations using the legacy EE FP -->
+        <profile>
+            <id>legacy-ee-tests-deps</id>
+            <activation>
+                <property>
+                    <name>legacy-ee-tests</name>
+                </property>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>org.jboss.spec.jakarta.el</groupId>
+                    <artifactId>jboss-el-api_5.0_spec</artifactId>
+                    <scope>test</scope>
                 </dependency>
             </dependencies>
         </profile>

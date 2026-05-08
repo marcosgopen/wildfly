@@ -39,14 +39,16 @@ version, but should likely be checked.
 Building the documentation can be done with the following command:
 
 .Generate Only
-```
+[source]
+----
 mvn clean package
-```
+----
 
 .Generate and Copy
-```
+[source]
+----
 mvn clean package -Pcopy-site
-```
+----
 
 The `asciidoctor-maven-plugin` will execute and generate html5 files. The files are generated in the
 `target/generated-docs` directory. You can optionally activate the `copy-site` profile to copy the generated site. See
@@ -86,9 +88,14 @@ In the `archives.adoc`, add a table row for the previous version of WildFly.
 Once you edit these 2 files, you'll need to regenerate their HTML files. This can be done with the `asciidoctor`
 command.
 
-```
+[source]
+----
 asciidoctor index.adoc archives.adoc
-```
+----
+
+=== Update publish GitHub pages workflow
+
+In your `wildfly.github.io` checkout, edit the `.github/workflows/jekyll-gh-pages.yml` file and update the `WILDFLY_DOC_DIR_VERSION_TO_SCAN` environment variable with the value of the new documentation version directory (for example, `16` for WildFly 16). The value of this variable indicates the new documentation directory that needs to be scanned to prepare the pre-built search index.
 
 === Update the Docs sitemap
 

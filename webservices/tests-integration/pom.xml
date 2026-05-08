@@ -16,13 +16,20 @@
         Maintain separation between the artifact id and the version to help prevent
         merge conflicts between commits changing the GA and those changing the V.
         -->
-        <version>38.0.0.Beta1-SNAPSHOT</version>
+        <version>40.0.0.Final-SNAPSHOT</version>
     </parent>
 
     <artifactId>wildfly-webservices-tests-integration</artifactId>
     <packaging>jar</packaging>
 
     <name>WildFly: Web Services Tests Integration Subsystem</name>
+
+    <properties>
+        <!-- Don't try to deploy the module -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <skipNexusStagingDeployMojo>true</skipNexusStagingDeployMojo>
+        <skipPublishing>${maven.deploy.skip}</skipPublishing>
+    </properties>
 
     <dependencies>
         <dependency> <!-- Required by activemq... -->
@@ -83,7 +90,7 @@
             <artifactId>jboss-remoting</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.apache.activemq</groupId>
+            <groupId>org.apache.artemis</groupId>
             <artifactId>artemis-commons</artifactId>
         </dependency>
         <!-- Required for activemq compatibility -->

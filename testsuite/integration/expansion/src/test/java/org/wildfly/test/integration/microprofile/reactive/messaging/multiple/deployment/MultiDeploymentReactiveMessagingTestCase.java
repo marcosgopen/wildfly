@@ -26,20 +26,20 @@ import org.apache.http.client.methods.HttpPost;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.message.BasicNameValuePair;
+import org.arquillian.testcontainers.api.TestcontainersRequired;
 import org.jboss.arquillian.container.test.api.Deployment;
 import org.jboss.arquillian.container.test.api.RunAsClient;
 import org.jboss.arquillian.junit.Arquillian;
 import org.jboss.arquillian.test.api.ArquillianResource;
-import org.jboss.arquillian.testcontainers.api.TestcontainersRequired;
 import org.jboss.as.arquillian.api.ServerSetup;
 import org.jboss.as.test.integration.management.base.AbstractCliTestBase;
 import org.jboss.as.test.shared.TimeoutUtil;
+import org.jboss.as.test.shared.util.AssumeTestGroupUtil;
 import org.jboss.dmr.ModelNode;
 import org.jboss.shrinkwrap.api.Archive;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.asset.EmptyAsset;
 import org.jboss.shrinkwrap.api.exporter.ZipExporter;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.jboss.shrinkwrap.api.spec.WebArchive;
 import org.junit.After;
 import org.junit.Assert;
@@ -83,12 +83,10 @@ public class MultiDeploymentReactiveMessagingTestCase extends AbstractCliTestBas
         closeCLI();
     }
 
+    // Dummy deployment to trigger @ServerSetup
     @Deployment(testable = false)
-    public static Archive<?> getDeployment() {
-        // Empty deployment to satisfy Arquillian
-        JavaArchive ja = ShrinkWrap.create(JavaArchive.class, "dummy.jar");
-        ja.addClass(EmptyClass.class);
-        return ja;
+    public static Archive<?> createDummyDeployment() {
+        return AssumeTestGroupUtil.emptyJar(MultiDeploymentReactiveMessagingTestCase.class.getSimpleName());
     }
 
     private Path createInVmDeployment() throws Exception {

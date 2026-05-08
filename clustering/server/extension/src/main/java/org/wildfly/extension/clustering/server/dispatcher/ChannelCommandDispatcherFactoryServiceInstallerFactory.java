@@ -12,6 +12,7 @@ import java.util.function.Supplier;
 
 import org.infinispan.protostream.ImmutableSerializationContext;
 import org.jboss.as.controller.ServiceNameFactory;
+import org.jboss.as.controller.management.Capabilities;
 import org.jboss.as.server.Services;
 import org.jboss.marshalling.MarshallingConfiguration;
 import org.jboss.marshalling.ModularClassResolver;
@@ -31,9 +32,8 @@ import org.wildfly.clustering.marshalling.protostream.modules.ModuleClassLoaderM
 import org.wildfly.clustering.server.dispatcher.Command;
 import org.wildfly.clustering.server.jgroups.dispatcher.ChannelCommandDispatcherFactory;
 import org.wildfly.clustering.server.jgroups.dispatcher.JChannelCommandDispatcherFactory;
-import org.wildfly.clustering.server.jgroups.dispatcher.JChannelCommandDispatcherFactoryConfiguration;
 import org.wildfly.clustering.server.service.ClusteringServiceDescriptor;
-import org.wildfly.common.function.Functions;
+import org.wildfly.service.BlockingLifecycle;
 import org.wildfly.service.Installer.StartWhen;
 import org.wildfly.subsystem.service.ServiceDependency;
 import org.wildfly.subsystem.service.ServiceInstaller;
@@ -70,7 +70,7 @@ public enum ChannelCommandDispatcherFactoryServiceInstallerFactory implements Fu
                 return new JBossByteBufferMarshaller(configuration, loader);
             }
         };
-        JChannelCommandDispatcherFactoryConfiguration configuration = new JChannelCommandDispatcherFactoryConfiguration() {
+        JChannelCommandDispatcherFactory.Configuration configuration = new JChannelCommandDispatcherFactory.Configuration() {
             @Override
             public JChannel getChannel() {
                 return channelFactory.get().getConfiguration().getChannel();
@@ -78,7 +78,8 @@ public enum ChannelCommandDispatcherFactoryServiceInstallerFactory implements Fu
 
             @Override
             public ByteBufferMarshaller getMarshaller() {
-                return new ProtoStreamByteBufferMarshaller(SerializationContextBuilder.newInstance(new ModuleClassLoaderMarshaller(moduleLoader.get())).load(channelFactory.get().getConfiguration().getChannelConfiguration().getModule().getClassLoader()).build());
+                ClassLoader loader = channelFactory.get().getConfiguration().getChannelConfiguration().getModule().getClassLoader();
+                return new ProtoStreamByteBufferMarshaller(SerializationContextBuilder.newInstance(new ModuleClassLoaderMarshaller(moduleLoader.get())).load(loader).build());
             }
 
             @Override
@@ -97,11 +98,10 @@ public enum ChannelCommandDispatcherFactoryServiceInstallerFactory implements Fu
                 return new JChannelCommandDispatcherFactory(configuration);
             }
         };
-        return ServiceInstaller.builder(factory)
+        return ServiceInstaller.BlockingBuilder.of(factory, ServiceDependency.on(Capabilities.MANAGEMENT_EXECUTOR))
                 .provides(ServiceNameFactory.resolveServiceName(ClusteringServiceDescriptor.COMMAND_DISPATCHER_FACTORY, name))
                 .requires(List.of(channelFactory, moduleLoader))
-                .onStop(Functions.closingConsumer())
-                .blocking()
+                .withLifecycle(BlockingLifecycle.autoClose())
                 .startWhen(StartWhen.AVAILABLE)
                 .build();
     }

@@ -17,7 +17,7 @@
         Maintain separation between the artifact id and the version to help prevent
         merge conflicts between commits changing the GA and those changing the V.
         -->
-        <version>38.0.0.Beta1-SNAPSHOT</version>
+        <version>40.0.0.Final-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
@@ -36,6 +36,16 @@
             N.B. Only include dependencies in this pom if they are used across
             'legacy', 'standard', and 'preview' builds.
             -->
+
+            <!-- BOMs -->
+
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${version.com.fasterxml.jackson}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
 
             <!-- Keep sorted -->
 
@@ -152,7 +162,29 @@
             </dependency>
             <dependency>
                 <groupId>${full.maven.groupId}</groupId>
-                <artifactId>wildfly-microprofile-openapi-smallrye</artifactId>
+                <artifactId>wildfly-microprofile-openapi-smallrye-extension</artifactId>
+                <version>${full.maven.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>*</groupId>
+                        <artifactId>*</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>${full.maven.groupId}</groupId>
+                <artifactId>wildfly-microprofile-openapi-smallrye-host</artifactId>
+                <version>${full.maven.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>*</groupId>
+                        <artifactId>*</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+            <dependency>
+                <groupId>${full.maven.groupId}</groupId>
+                <artifactId>wildfly-microprofile-openapi-smallrye-spi</artifactId>
                 <version>${full.maven.version}</version>
                 <exclusions>
                     <exclusion>
@@ -312,18 +344,6 @@
             </dependency>
 
             <dependency>
-                <groupId>com.fasterxml.jackson.jr</groupId>
-                <artifactId>jackson-jr-objects</artifactId>
-                <version>${version.com.fasterxml.jackson.jr.jackson-jr-objects}</version>
-                <exclusions>
-                    <exclusion>
-                        <groupId>*</groupId>
-                        <artifactId>*</artifactId>
-                    </exclusion>
-                </exclusions>
-            </dependency>
-
-            <dependency>
                 <groupId>com.google.api.grpc</groupId>
                 <artifactId>proto-google-common-protos</artifactId>
                 <version>${version.com.google.api.grpc}</version>
@@ -405,18 +425,6 @@
                 <groupId>io.micrometer</groupId>
                 <artifactId>micrometer-registry-prometheus</artifactId>
                 <version>${version.io.micrometer}</version>
-                <exclusions>
-                    <exclusion>
-                        <groupId>*</groupId>
-                        <artifactId>*</artifactId>
-                    </exclusion>
-                </exclusions>
-            </dependency>
-
-            <dependency>
-                <groupId>io.netty</groupId>
-                <artifactId>netty-codec-http2</artifactId>
-                <version>${version.io.netty}</version>
                 <exclusions>
                     <exclusion>
                         <groupId>*</groupId>
@@ -646,6 +654,18 @@
                     </exclusion>
                 </exclusions>
             </dependency>
+            <dependency>
+                <groupId>io.opentelemetry.semconv</groupId>
+                <artifactId>opentelemetry-semconv-incubating</artifactId>
+                <version>${version.io.opentelemetry.opentelemetry-semconv}-alpha</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>*</groupId>
+                        <artifactId>*</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+
             <!-- OpenTelemetry -->
 
             <dependency>
@@ -1150,17 +1170,6 @@
                     </exclusion>
                 </exclusions>
             </dependency>
-            <dependency>
-                <groupId>io.vertx</groupId>
-                <artifactId>vertx-kafka-client</artifactId>
-                <version>${version.io.vertx.vertx-kafka-client}</version>
-                <exclusions>
-                    <exclusion>
-                        <groupId>*</groupId>
-                        <artifactId>*</artifactId>
-                    </exclusion>
-                </exclusions>
-            </dependency>
 
             <dependency>
                 <groupId>io.vertx</groupId>
@@ -1396,9 +1405,9 @@
             </dependency>
 
             <dependency>
-                <groupId>org.lz4</groupId>
+                <groupId>at.yawk.lz4</groupId>
                 <artifactId>lz4-java</artifactId>
-                <version>${version.org.lz4.lz4-java}</version>
+                <version>${version.at.yawk.lz4.lz4-java}</version>
                 <exclusions>
                     <exclusion>
                         <groupId>*</groupId>

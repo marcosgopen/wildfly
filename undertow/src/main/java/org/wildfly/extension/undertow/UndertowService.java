@@ -30,7 +30,7 @@ import io.undertow.Version;
  * @author <a href="mailto:ropalka@redhat.com">Richard Opalka</a>
  */
 public class UndertowService implements Service<UndertowService> {
-    public static NullaryServiceDescriptor<UndertowService> SERVICE_DESCRIPTOR = NullaryServiceDescriptor.of(Capabilities.CAPABILITY_UNDERTOW, UndertowService.class);
+    public static final NullaryServiceDescriptor<UndertowService> SERVICE_DESCRIPTOR = NullaryServiceDescriptor.of(Capabilities.CAPABILITY_UNDERTOW, UndertowService.class);
 
     /**
      * @deprecated Replaced by capability reference {@link UndertowRootDefinition#UNDERTOW_CAPABILITY}.
@@ -125,6 +125,7 @@ public class UndertowService implements Service<UndertowService> {
         return AccessLogDefinition.ACCESS_LOG_CAPABILITY.getCapabilityServiceName(server, virtualHost);
     }
 
+    @Deprecated(forRemoval = true)
     public static ServiceName consoleRedirectServiceName(final String server, final String virtualHost) {
         return virtualHostName(server, virtualHost).append("console", "redirect");
     }

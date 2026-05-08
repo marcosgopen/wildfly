@@ -7,7 +7,6 @@ package org.jboss.as.clustering.infinispan.subsystem;
 import java.util.List;
 import java.util.function.UnaryOperator;
 
-import org.infinispan.Cache;
 import org.infinispan.configuration.cache.ConfigurationBuilder;
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.OperationContext;
@@ -19,24 +18,23 @@ import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 import org.wildfly.subsystem.resource.ResourceDescriptor;
 import org.wildfly.subsystem.service.ServiceDependency;
-import org.wildfly.subsystem.service.capture.FunctionExecutorRegistry;
 
 /**
  * Registers a resource definition for a segmented cache configuration.
  * @author Paul Ferraro
  */
-public class SegmentedCacheResourceDefinitionRegistrar extends SharedStateCacheResourceDefinitionRegistrar {
+public class SegmentedCacheResourceDefinitionRegistrar extends ClusteredCacheResourceDefinitionRegistrar {
 
     static final AttributeDefinition SEGMENTS = new SimpleAttributeDefinitionBuilder("segments", ModelType.INT)
             .setAllowExpression(true)
             .setRequired(false)
-            .setDefaultValue(new ModelNode(256))
+            .setDefaultValue(new ModelNode(128))
             .setValidator(IntRangeValidator.POSITIVE)
             .setFlags(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
             .build();
 
-    SegmentedCacheResourceDefinitionRegistrar(CacheResourceRegistration registration, FunctionExecutorRegistry<Cache<?, ?>> executors) {
-        super(registration, executors);
+    SegmentedCacheResourceDefinitionRegistrar(CacheResourceRegistration registration) {
+        super(registration);
     }
 
     @Override

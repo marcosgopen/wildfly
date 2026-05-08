@@ -103,7 +103,7 @@ public abstract class AbstractEntityManager implements EntityManager {
         } finally {
             if (isTraceEnabled) {
                 long elapsed = System.currentTimeMillis() - start;
-                ROOT_LOGGER.tracef("createQuery took %dms", elapsed);
+                ROOT_LOGGER.tracef("createQuery criteriaQuery took %dms", elapsed);
             }
         }
     }
@@ -134,7 +134,7 @@ public abstract class AbstractEntityManager implements EntityManager {
         } finally {
             if (isTraceEnabled) {
                 long elapsed = System.currentTimeMillis() - start;
-                ROOT_LOGGER.tracef("detach entityClass '%s' took %dms", entity.getClass().getName(), elapsed);
+                ROOT_LOGGER.tracef("detach entityClass '%s' took %dms", getClassName(entity), elapsed);
             }
         }
     }
@@ -246,7 +246,7 @@ public abstract class AbstractEntityManager implements EntityManager {
         } finally {
             if (isTraceEnabled) {
                 long elapsed = System.currentTimeMillis() - start;
-                ROOT_LOGGER.tracef("getLockMode entityClass '%s', lockMode '%s'  took %dms", entity.getClass().getName(), getLockModeAsString(result), elapsed);
+                ROOT_LOGGER.tracef("getLockMode entityClass '%s', lockMode '%s' took %dms", getClassName(entity), getLockModeAsString(result), elapsed);
             }
         }
         return result;
@@ -289,9 +289,13 @@ public abstract class AbstractEntityManager implements EntityManager {
         } finally {
             if (isTraceEnabled) {
                 long elapsed = System.currentTimeMillis() - start;
-                ROOT_LOGGER.tracef("lock entityClass '%s', lockMode '%s'  took %dms", entity.getClass().getName(), getLockModeAsString(lockMode), elapsed);
+                ROOT_LOGGER.tracef("lock entityClass '%s', lockMode '%s' took %dms", getClassName(entity), getLockModeAsString(lockMode), elapsed);
             }
         }
+    }
+
+    protected static String getClassName(Object entity) {
+        return entity != null ? entity.getClass().getName() : "null";
     }
 
 
@@ -346,7 +350,7 @@ public abstract class AbstractEntityManager implements EntityManager {
         } finally {
             if (isTraceEnabled) {
                 long elapsed = System.currentTimeMillis() - start;
-                ROOT_LOGGER.tracef("contains '%s' took %dms", entity.getClass().getName(), elapsed);
+                ROOT_LOGGER.tracef("contains '%s' took %dms", getClassName(entity), elapsed);
             }
         }
     }
@@ -537,7 +541,7 @@ public abstract class AbstractEntityManager implements EntityManager {
         } finally {
             if (isTraceEnabled) {
                 long elapsed = System.currentTimeMillis() - start;
-                ROOT_LOGGER.tracef("lock entityClass '%s', lockMode '%s' took %dms", entity.getClass().getName(), getLockModeAsString(lockMode), elapsed);
+                ROOT_LOGGER.tracef("lock entityClass '%s', lockMode '%s' took %dms", getClassName(entity), getLockModeAsString(lockMode), elapsed);
             }
         }
     }
@@ -552,7 +556,7 @@ public abstract class AbstractEntityManager implements EntityManager {
         } finally {
             if (isTraceEnabled) {
                 long elapsed = System.currentTimeMillis() - start;
-                ROOT_LOGGER.tracef("merge entityClass '%s' took %dms", entity.getClass().getName(), elapsed);
+                ROOT_LOGGER.tracef("merge entityClass '%s' took %dms", getClassName(entity), elapsed);
             }
         }
     }
@@ -567,7 +571,7 @@ public abstract class AbstractEntityManager implements EntityManager {
         } finally {
             if (isTraceEnabled) {
                 long elapsed = System.currentTimeMillis() - start;
-                ROOT_LOGGER.tracef("persist entityClass '%s' took %dms", entity.getClass().getName(), elapsed);
+                ROOT_LOGGER.tracef("persist entityClass '%s' took %dms", getClassName(entity), elapsed);
             }
         }
     }
@@ -582,7 +586,7 @@ public abstract class AbstractEntityManager implements EntityManager {
         } finally {
             if (isTraceEnabled) {
                 long elapsed = System.currentTimeMillis() - start;
-                ROOT_LOGGER.tracef("refresh entityClass '%s' took %dms", entity.getClass().getName(), elapsed);
+                ROOT_LOGGER.tracef("refresh entityClass '%s' took %dms", getClassName(entity), elapsed);
             }
         }
     }
@@ -597,7 +601,7 @@ public abstract class AbstractEntityManager implements EntityManager {
         } finally {
             if (isTraceEnabled) {
                 long elapsed = System.currentTimeMillis() - start;
-                ROOT_LOGGER.tracef("refresh entityClass '%s' took %dms", entity.getClass().getName(), elapsed);
+                ROOT_LOGGER.tracef("refresh entityClass '%s' took %dms", getClassName(entity), elapsed);
             }
         }
     }
@@ -612,7 +616,7 @@ public abstract class AbstractEntityManager implements EntityManager {
         } finally {
             if (isTraceEnabled) {
                 long elapsed = System.currentTimeMillis() - start;
-                ROOT_LOGGER.tracef("refresh entityClass '%s', lockMode '%s' took %dms", entity.getClass().getName(), getLockModeAsString(lockMode), elapsed);
+                ROOT_LOGGER.tracef("refresh entityClass '%s', lockMode '%s' took %dms", getClassName(entity), getLockModeAsString(lockMode), elapsed);
             }
         }
     }
@@ -627,7 +631,7 @@ public abstract class AbstractEntityManager implements EntityManager {
         } finally {
             if (isTraceEnabled) {
                 long elapsed = System.currentTimeMillis() - start;
-                ROOT_LOGGER.tracef("refresh entityClass '%s', lockMode '%s' took %dms", entity.getClass().getName(), getLockModeAsString(lockMode), elapsed);
+                ROOT_LOGGER.tracef("refresh entityClass '%s', lockMode '%s' took %dms", getClassName(entity), getLockModeAsString(lockMode), elapsed);
             }
         }
     }
@@ -642,7 +646,7 @@ public abstract class AbstractEntityManager implements EntityManager {
         } finally {
             if (isTraceEnabled) {
                 long elapsed = System.currentTimeMillis() - start;
-                ROOT_LOGGER.tracef("remove entityClass '%s' took %dms", entity.getClass().getName(), elapsed);
+                ROOT_LOGGER.tracef("remove entityClass '%s' took %dms", getClassName(entity), elapsed);
             }
         }
     }
@@ -821,6 +825,10 @@ public abstract class AbstractEntityManager implements EntityManager {
         }
     }
 
+    protected boolean isTraceEnabled() {
+        return isTraceEnabled;
+    }
+
 
     // used by TransactionScopedEntityManager to auto detach loaded entities
     // after each non-Jakarta Transactions invocation
@@ -858,13 +866,13 @@ public abstract class AbstractEntityManager implements EntityManager {
 
     // JPA 7.9.1 if invoked without a Jakarta Transactions transaction and a transaction scoped persistence context is used,
     // will throw TransactionRequiredException for any calls to entity manager remove/merge/persist/refresh.
-    private void transactionIsRequired() {
+    protected void transactionIsRequired() {
         if (!this.isExtendedPersistenceContext() && !this.isInTx()) {
             throw JpaLogger.ROOT_LOGGER.transactionRequired();
         }
     }
 
-    private static String getLockModeAsString(LockModeType lockMode) {
+    protected static String getLockModeAsString(LockModeType lockMode) {
         if (lockMode == null)
             return NULL_LOCK_MODE;
         switch (lockMode) {

@@ -11,7 +11,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.ServiceLoader;
 import java.util.function.BiPredicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -19,7 +18,6 @@ import java.util.stream.Collectors;
 import javax.management.MBeanServer;
 
 import org.infinispan.Cache;
-import org.infinispan.commands.module.ModuleCommandExtensions;
 import org.infinispan.commons.jmx.MBeanServerLookup;
 import org.infinispan.commons.marshall.Marshaller;
 import org.infinispan.commons.util.AggregatedClassLoader;
@@ -35,10 +33,7 @@ import org.infinispan.globalstate.ConfigurationStorage;
 import org.infinispan.manager.EmbeddedCacheManager;
 import org.infinispan.protostream.SerializationContext;
 import org.infinispan.protostream.SerializationContextInitializer;
-import org.jboss.as.clustering.controller.EnumAttributeDefinition;
 import org.jboss.as.clustering.controller.MBeanServerResolver;
-import org.jboss.as.clustering.controller.ModuleListAttributeDefinition;
-import org.jboss.as.clustering.controller.StatisticsEnabledAttributeDefinition;
 import org.jboss.as.clustering.infinispan.jmx.MBeanServerProvider;
 import org.jboss.as.clustering.infinispan.logging.InfinispanLogger;
 import org.jboss.as.clustering.naming.BinderServiceInstaller;
@@ -52,7 +47,7 @@ import org.jboss.as.controller.StringListAttributeDefinition;
 import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.controller.descriptions.ResourceDescriptionResolver;
-import org.jboss.as.controller.operations.validation.ParameterValidator;
+import org.jboss.as.controller.management.Capabilities;
 import org.jboss.as.controller.registry.AttributeAccess;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.Resource;
@@ -71,9 +66,12 @@ import org.wildfly.clustering.singleton.service.SingletonServiceTargetFactory;
 import org.wildfly.service.Installer.StartWhen;
 import org.wildfly.service.descriptor.UnaryServiceDescriptor;
 import org.wildfly.subsystem.resource.ChildResourceDefinitionRegistrar;
+import org.wildfly.subsystem.resource.EnumAttributeDefinition;
 import org.wildfly.subsystem.resource.ManagementResourceRegistrar;
 import org.wildfly.subsystem.resource.ManagementResourceRegistrationContext;
+import org.wildfly.subsystem.resource.ModuleListAttributeDefinition;
 import org.wildfly.subsystem.resource.ResourceDescriptor;
+import org.wildfly.subsystem.resource.StatisticsEnabledAttributeDefinition;
 import org.wildfly.subsystem.resource.capability.CapabilityReference;
 import org.wildfly.subsystem.resource.capability.CapabilityReferenceAttributeDefinition;
 import org.wildfly.subsystem.resource.executor.MetricOperationStepHandler;
@@ -96,15 +94,9 @@ public class CacheContainerResourceDefinitionRegistrar implements ChildResourceD
 
     static final CapabilityReferenceAttributeDefinition<Configuration> DEFAULT_CACHE = new CapabilityReferenceAttributeDefinition.Builder<>("default-cache", CapabilityReference.builder(CAPABILITY, InfinispanServiceDescriptor.CACHE_CONFIGURATION).withParentPath(REGISTRATION.getPathElement()).build()).setRequired(false).build();
     static final StatisticsEnabledAttributeDefinition STATISTICS_ENABLED = new StatisticsEnabledAttributeDefinition.Builder().build();
-    static final EnumAttributeDefinition<InfinispanMarshallerFactory> MARSHALLER = new EnumAttributeDefinition.Builder<>("marshaller", InfinispanMarshallerFactory.LEGACY)
-            .setValidator(new ParameterValidator() {
-                @Override
-                public void validateParameter(String parameterName, ModelNode value) throws OperationFailedException {
-                    if (!value.isDefined() || value.asString().equals(InfinispanMarshallerFactory.LEGACY.name())) {
-                        InfinispanLogger.ROOT_LOGGER.marshallerEnumValueDeprecated(parameterName, InfinispanMarshallerFactory.LEGACY, EnumSet.complementOf(EnumSet.of(InfinispanMarshallerFactory.LEGACY)));
-                    }
-                }
-            })
+    static final EnumAttributeDefinition<InfinispanMarshallerFactory> MARSHALLER = EnumAttributeDefinition.nameBuilder("marshaller", InfinispanMarshallerFactory.class)
+            .setDefaultValue(InfinispanMarshallerFactory.LEGACY)
+            .setCorrector(InfinispanMarshallerFactory.CORRECTOR)
             .build();
     static final StringListAttributeDefinition ALIASES = new StringListAttributeDefinition.Builder("aliases").setRequired(false).setFlags(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES).build();
     static final ModuleListAttributeDefinition MODULES = new ModuleListAttributeDefinition.Builder().setRequired(false).setDefaultValue(Module.forClass(WildFlyClusteringModuleLifecycle.class)).build();
@@ -225,18 +217,6 @@ public class CacheContainerResourceDefinitionRegistrar implements ChildResourceD
                 // Register dummy serialization context initializer, to bypass service loading in org.infinispan.marshall.protostream.impl.SerializationContextRegistryImpl
                 // Otherwise marshaller auto-detection will not work
                 builder.serialization().marshaller(marshaller).addContextInitializer(new SerializationContextInitializer() {
-                    @Deprecated
-                    @Override
-                    public String getProtoFile() {
-                        return null;
-                    }
-
-                    @Deprecated
-                    @Override
-                    public String getProtoFileName() {
-                        return null;
-                    }
-
                     @Override
                     public void registerMarshallers(SerializationContext context) {
                     }
@@ -255,8 +235,8 @@ public class CacheContainerResourceDefinitionRegistrar implements ChildResourceD
                 builder.expirationThreadPool().read(scheduledPools.get(ScheduledThreadPool.EXPIRATION).get());
 
                 builder.shutdown().hookBehavior(ShutdownHookBehavior.DONT_REGISTER);
-                // Disable registration of MicroProfile Metrics
-                builder.metrics().gauges(false).histograms(false).accurateSize(true);
+                // Disable native Micrometer registration - we register metrics via management model
+                builder.metrics().gauges(false).histograms(false).accurateSize(!statisticsEnabled);
 
                 MBeanServerLookup mbeanServerProvider = Optional.ofNullable(mbeanServer.get()).map(MBeanServerProvider::new).orElse(null);
                 builder.jmx().domain("org.wildfly.clustering.infinispan")
@@ -264,12 +244,10 @@ public class CacheContainerResourceDefinitionRegistrar implements ChildResourceD
                         .enabled(mbeanServerProvider != null)
                         ;
 
-                // Disable triangle algorithm - we optimize for originator as primary owner
-                // Do not enable server-mode for the Hibernate 2LC use case:
-                // * The 2LC stack already overrides the interceptor for distribution caches
-                // * This renders Infinispan default 2LC configuration unusable as it results in a default media type of application/unknown for keys and values
+                // Disable triangle algorithm for transactional distributed caches - we optimize for originator as primary owner
+                // Now that managed cache configurations always define a cache encoding, this should no longer be problematic for Hibernate 2LC interceptors
                 // See ISPN-12252 for details
-                builder.addModule(PrivateGlobalConfigurationBuilder.class).serverMode(!ServiceLoader.load(ModuleCommandExtensions.class, loader).iterator().hasNext());
+                builder.addModule(PrivateGlobalConfigurationBuilder.class).serverMode(true);
 
                 String path = InfinispanSubsystemResourceDefinitionRegistrar.REGISTRATION.getName() + File.separatorChar + name;
                 builder.globalState().enable()
@@ -280,22 +258,22 @@ public class CacheContainerResourceDefinitionRegistrar implements ChildResourceD
                 return builder.build();
             }
         };
-        CapabilityServiceInstaller.Builder<GlobalConfiguration, GlobalConfiguration> builder = CapabilityServiceInstaller.builder(CAPABILITY, factory);
+        CapabilityServiceInstaller.BlockingBuilder<GlobalConfiguration, GlobalConfiguration> builder = CapabilityServiceInstaller.BlockingBuilder.of(CAPABILITY, factory, ServiceDependency.on(Capabilities.MANAGEMENT_EXECUTOR))
+                .requires(List.of(mbeanServer, loader, containerModules, transport, environment))
+                .requires(pools.values())
+                .requires(scheduledPools.values())
+                .startWhen(StartWhen.AVAILABLE)
+                ;
         for (String alias : aliases) {
             builder.provides(ServiceNameFactory.resolveServiceName(InfinispanServiceDescriptor.CACHE_CONTAINER_CONFIGURATION, alias));
         }
-        installers.add(builder.blocking()
-            .requires(List.of(mbeanServer, loader, containerModules, transport, environment))
-            .requires(pools.values())
-            .requires(scheduledPools.values())
-            .startWhen(StartWhen.AVAILABLE)
-            .build());
+        installers.add(builder.build());
 
         String defaultCache = DEFAULT_CACHE.resolveModelAttribute(context, model).asString(null);
         if (defaultCache != null) {
             BinaryServiceConfiguration configuration = BinaryServiceConfiguration.of(name, defaultCache);
-            installers.add(CapabilityServiceInstaller.builder(DefaultCacheCapability.CACHE_CONFIGURATION.get(), configuration.getServiceDependency(InfinispanServiceDescriptor.CACHE_CONFIGURATION)).build());
-            installers.add(CapabilityServiceInstaller.builder(DefaultCacheCapability.CACHE.get(), configuration.getServiceDependency(InfinispanServiceDescriptor.CACHE)).build());
+            installers.add(CapabilityServiceInstaller.BlockingBuilder.of(DefaultCacheCapability.CACHE_CONFIGURATION.get(), configuration.getServiceDependency(InfinispanServiceDescriptor.CACHE_CONFIGURATION)).startWhen(StartWhen.AVAILABLE).build());
+            installers.add(CapabilityServiceInstaller.BlockingBuilder.of(DefaultCacheCapability.CACHE.get(), configuration.getServiceDependency(InfinispanServiceDescriptor.CACHE)).startWhen(StartWhen.AVAILABLE).build());
 
             // Install bindings for default cache
             if (!defaultCache.equals(ModelDescriptionConstants.DEFAULT)) {

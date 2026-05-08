@@ -5,7 +5,6 @@
 
 package org.jboss.as.ee.subsystem;
 
-import static org.jboss.as.ee.subsystem.EeCapabilities.ELYTRON_JACC_CAPABILITY;
 import static org.jboss.as.ee.logging.EeLogger.ROOT_LOGGER;
 
 import org.jboss.as.controller.AbstractBoottimeAddStepHandler;
@@ -13,7 +12,6 @@ import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.ProcessType;
-import org.jboss.as.controller.capability.CapabilityServiceSupport;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.ee.component.ReflectiveClassIntrospector;
 import org.jboss.as.ee.component.deployers.ApplicationClassesAggregationProcessor;
@@ -118,7 +116,7 @@ public class EeSubsystemAdd extends AbstractBoottimeAddStepHandler {
     protected void performBoottime(final OperationContext context, final ModelNode operation, final Resource resource) throws OperationFailedException {
         ModelNode model = resource.getModel();
         final EEJndiViewExtension extension = new EEJndiViewExtension();
-        context.getServiceTarget().addService(EEJndiViewExtension.SERVICE_NAME, extension)
+        context.getCapabilityServiceTarget().addService(EEJndiViewExtension.SERVICE_NAME, extension)
                 .addDependency(JndiViewExtensionRegistry.SERVICE_NAME, JndiViewExtensionRegistry.class, extension.getRegistryInjector())
                 .install();
 
@@ -138,9 +136,6 @@ public class EeSubsystemAdd extends AbstractBoottimeAddStepHandler {
         jbossDescriptorPropertyReplacementProcessor.setDescriptorPropertyReplacement(jbossDescriptorPropertyReplacement);
         ejbAnnotationPropertyReplacementProcessor.setDescriptorPropertyReplacement(ejbAnnotationPropertyReplacement);
 
-        CapabilityServiceSupport capabilitySupport = context.getCapabilityServiceSupport();
-        final boolean elytronJacc = capabilitySupport.hasCapability(ELYTRON_JACC_CAPABILITY);
-
         context.addStep(new AbstractDeploymentChainStep() {
             protected void execute(DeploymentProcessorTarget processorTarget) {
 
@@ -157,7 +152,7 @@ public class EeSubsystemAdd extends AbstractBoottimeAddStepHandler {
                 processorTarget.addDeploymentProcessor(EeExtension.SUBSYSTEM_NAME, Phase.STRUCTURE, Phase.STRUCTURE_EAR_APP_XML_PARSE, new EarMetaDataParsingProcessor());
                 processorTarget.addDeploymentProcessor(EeExtension.SUBSYSTEM_NAME, Phase.STRUCTURE, Phase.STRUCTURE_JBOSS_EJB_CLIENT_XML_PARSE, new EJBClientDescriptorParsingProcessor());
                 processorTarget.addDeploymentProcessor(EeExtension.SUBSYSTEM_NAME, Phase.STRUCTURE, Phase.STRUCTURE_EJB_EAR_APPLICATION_NAME, new EarApplicationNameProcessor());
-                processorTarget.addDeploymentProcessor(EeExtension.SUBSYSTEM_NAME, Phase.STRUCTURE, Phase.STRUCTURE_EAR, new EarStructureProcessor());
+                processorTarget.addDeploymentProcessor(EeExtension.SUBSYSTEM_NAME, Phase.STRUCTURE, Phase.STRUCTURE_EAR, new EarStructureProcessor(context.getProcessType() == ProcessType.APPLICATION_CLIENT));
                 processorTarget.addDeploymentProcessor(EeExtension.SUBSYSTEM_NAME, Phase.STRUCTURE, Phase.STRUCTURE_EJB_JAR_IN_EAR, new EjbJarDeploymentProcessor());
                 processorTarget.addDeploymentProcessor(EeExtension.SUBSYSTEM_NAME, Phase.STRUCTURE, Phase.STRUCTURE_APPLICATION_CLIENT_IN_EAR, new ApplicationClientDeploymentProcessor());
                 processorTarget.addDeploymentProcessor(EeExtension.SUBSYSTEM_NAME, Phase.STRUCTURE, Phase.STRUCTURE_MANAGED_BEAN_JAR_IN_EAR, new ManagedBeanSubDeploymentMarkingProcessor());
@@ -190,10 +185,7 @@ public class EeSubsystemAdd extends AbstractBoottimeAddStepHandler {
                 processorTarget.addDeploymentProcessor(EeExtension.SUBSYSTEM_NAME, Phase.POST_MODULE, Phase.POST_MODULE_EE_INSTANCE_NAME, new InstanceNameBindingProcessor());
                 processorTarget.addDeploymentProcessor(EeExtension.SUBSYSTEM_NAME, Phase.POST_MODULE, Phase.POST_MODULE_APP_NAMING_CONTEXT, new ApplicationContextProcessor());
                 processorTarget.addDeploymentProcessor(EeExtension.SUBSYSTEM_NAME, Phase.POST_MODULE, Phase.POST_MODULE_EE_STARTUP_COUNTDOWN, new EEStartupCountdownProcessor());
-
-                if (elytronJacc) {
-                    processorTarget.addDeploymentProcessor(EeExtension.SUBSYSTEM_NAME, Phase.INSTALL, Phase.INSTALL_JACC_POLICY, new JaccEarDeploymentProcessor(ELYTRON_JACC_CAPABILITY));
-                }
+                processorTarget.addDeploymentProcessor(EeExtension.SUBSYSTEM_NAME, Phase.INSTALL, Phase.INSTALL_JACC_POLICY, new JaccEarDeploymentProcessor());
                 processorTarget.addDeploymentProcessor(EeExtension.SUBSYSTEM_NAME, Phase.INSTALL, Phase.INSTALL_RESOLVE_MESSAGE_DESTINATIONS, new MessageDestinationResolutionProcessor());
                 processorTarget.addDeploymentProcessor(EeExtension.SUBSYSTEM_NAME, Phase.INSTALL, Phase.INSTALL_COMPONENT_AGGREGATION, new ComponentAggregationProcessor());
 
@@ -209,7 +201,7 @@ public class EeSubsystemAdd extends AbstractBoottimeAddStepHandler {
             }
         }, OperationContext.Stage.RUNTIME);
 
-        context.getServiceTarget().addService(ReflectiveClassIntrospector.SERVICE_NAME, new ReflectiveClassIntrospector()).install();
+        context.getCapabilityServiceTarget().addService(ReflectiveClassIntrospector.SERVICE_NAME, new ReflectiveClassIntrospector()).install();
 
         ConcurrencyImplementation.INSTANCE.installSubsystemServices(context);
     }

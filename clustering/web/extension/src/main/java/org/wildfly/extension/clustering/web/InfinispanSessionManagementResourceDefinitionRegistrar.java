@@ -4,10 +4,14 @@
  */
 package org.wildfly.extension.clustering.web;
 
+import java.util.List;
+
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
+import org.jboss.as.version.Stability;
 import org.wildfly.clustering.infinispan.service.InfinispanCacheConfigurationAttributeGroup;
 import org.wildfly.clustering.server.service.CacheConfigurationAttributeGroup;
 import org.wildfly.extension.clustering.web.session.infinispan.InfinispanSessionManagementProvider;
+import org.wildfly.subsystem.resource.DurationAttributeDefinition;
 import org.wildfly.subsystem.resource.ManagementResourceRegistrationContext;
 import org.wildfly.subsystem.resource.ResourceDescriptor;
 
@@ -19,6 +23,11 @@ public class InfinispanSessionManagementResourceDefinitionRegistrar extends Sess
 
     static final CacheConfigurationAttributeGroup CACHE_ATTRIBUTE_GROUP = new InfinispanCacheConfigurationAttributeGroup(CAPABILITY);
 
+    static final DurationAttributeDefinition IDLE_THRESHOLD = DurationAttributeDefinition.builder("idle-threshold")
+            .setRequired(false)
+            .setStability(Stability.COMMUNITY)
+            .build();
+
     InfinispanSessionManagementResourceDefinitionRegistrar() {
         super(SessionManagementResourceRegistration.INFINISPAN, CACHE_ATTRIBUTE_GROUP, InfinispanSessionManagementProvider::new);
     }
@@ -26,6 +35,7 @@ public class InfinispanSessionManagementResourceDefinitionRegistrar extends Sess
     @Override
     public ResourceDescriptor.Builder apply(ResourceDescriptor.Builder builder) {
         return super.apply(builder)
+                .addAttributes(List.of(IDLE_THRESHOLD))
                 .requireSingletonChildResource(AffinityResourceRegistration.PRIMARY_OWNER)
                 ;
     }

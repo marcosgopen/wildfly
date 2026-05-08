@@ -4,11 +4,14 @@
  */
 package org.wildfly.extension.clustering.web;
 
+import static org.wildfly.extension.clustering.web.InfinispanSessionManagementResourceDefinitionRegistrar.IDLE_THRESHOLD;
+
+import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
-import org.jboss.as.clustering.controller.EnumAttributeDefinition;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.PathElement;
@@ -29,6 +32,7 @@ import org.wildfly.clustering.web.service.session.DistributableSessionManagement
 import org.wildfly.clustering.web.service.session.DistributableSessionManagementProvider;
 import org.wildfly.extension.clustering.web.session.DistributableSessionManagementProviderFactory;
 import org.wildfly.subsystem.resource.ChildResourceDefinitionRegistrar;
+import org.wildfly.subsystem.resource.EnumAttributeDefinition;
 import org.wildfly.subsystem.resource.ManagementResourceRegistrar;
 import org.wildfly.subsystem.resource.ManagementResourceRegistrationContext;
 import org.wildfly.subsystem.resource.ResourceDescriptor;
@@ -48,8 +52,10 @@ public abstract class SessionManagementResourceDefinitionRegistrar implements Ch
             .setAllowMultipleRegistrations(true)
             .build();
 
-    static final EnumAttributeDefinition<SessionGranularity> GRANULARITY = new EnumAttributeDefinition.Builder<>("granularity", SessionGranularity.class).build();
-    static final EnumAttributeDefinition<SessionMarshallerFactory> MARSHALLER = new EnumAttributeDefinition.Builder<>("marshaller", SessionMarshallerFactory.JBOSS).build();
+    static final EnumAttributeDefinition<SessionGranularity> GRANULARITY = EnumAttributeDefinition.nameBuilder("granularity", SessionGranularity.class).build();
+    static final EnumAttributeDefinition<SessionMarshallerFactory> MARSHALLER = EnumAttributeDefinition.nameBuilder("marshaller", SessionMarshallerFactory.class)
+            .setDefaultValue(SessionMarshallerFactory.JBOSS)
+            .build();
 
     private final ResourceRegistration registration;
     private final CacheConfigurationAttributeGroup cacheAttributeGroup;
@@ -87,6 +93,7 @@ public abstract class SessionManagementResourceDefinitionRegistrar implements Ch
     public ResourceServiceInstaller configure(OperationContext context, ModelNode model) throws OperationFailedException {
         SessionGranularity granularity = GRANULARITY.resolve(context, model);
         SessionMarshallerFactory marshallerFactory = MARSHALLER.resolve(context, model);
+        Optional<Duration> idleThreshold = Optional.ofNullable(IDLE_THRESHOLD.resolve(context, model));
         DistributableSessionManagementConfiguration<DeploymentUnit> configuration = new DistributableSessionManagementConfiguration<>() {
             @Override
             public SessionAttributePersistenceStrategy getAttributePersistenceStrategy() {
@@ -97,10 +104,15 @@ public abstract class SessionManagementResourceDefinitionRegistrar implements Ch
             public Function<DeploymentUnit, ByteBufferMarshaller> getMarshallerFactory() {
                 return marshallerFactory;
             }
+
+            @Override
+            public Optional<Duration> getIdleThreshold() {
+                return idleThreshold;
+            }
         };
         BinaryServiceConfiguration cacheConfiguration = this.cacheAttributeGroup.resolve(context, model);
         DistributableSessionManagementProviderFactory providerFactory = this.providerFactory;
-        return CapabilityServiceInstaller.builder(CAPABILITY, ServiceDependency.on(RouteLocatorProvider.SERVICE_DESCRIPTOR, context.getCurrentAddressValue()).map(new Function<>() {
+        return CapabilityServiceInstaller.BlockingBuilder.of(CAPABILITY, ServiceDependency.on(RouteLocatorProvider.SERVICE_DESCRIPTOR, context.getCurrentAddressValue()).map(new Function<>() {
             @Override
             public DistributableSessionManagementProvider apply(RouteLocatorProvider locatorProvider) {
                 return providerFactory.createSessionManagementProvider(configuration, cacheConfiguration, locatorProvider);

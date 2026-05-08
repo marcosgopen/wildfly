@@ -5,6 +5,7 @@
 package org.jboss.as.clustering.jgroups.subsystem;
 
 import static org.jboss.as.clustering.jgroups.logging.JGroupsLogger.ROOT_LOGGER;
+import static org.jboss.as.clustering.jgroups.subsystem.ProtocolChildResourceDefinitionRegistrar.findProtocolClass;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -31,10 +32,10 @@ import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.controller.descriptions.ParentResourceDescriptionResolver;
 import org.jboss.as.controller.descriptions.SubsystemResourceDescriptionResolver;
+import org.jboss.as.controller.management.Capabilities;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.dmr.ModelNode;
-import org.jgroups.Global;
 import org.jgroups.JChannel;
 import org.jgroups.Version;
 import org.jgroups.conf.ProtocolConfiguration;
@@ -47,6 +48,7 @@ import org.wildfly.clustering.jgroups.spi.JGroupsServiceDescriptor;
 import org.wildfly.clustering.server.service.ClusteringServiceDescriptor;
 import org.wildfly.clustering.server.service.DefaultChannelServiceInstallerProvider;
 import org.wildfly.clustering.server.service.ProvidedUnaryServiceInstallerProvider;
+import org.wildfly.service.Installer;
 import org.wildfly.subsystem.resource.ManagementResourceRegistrar;
 import org.wildfly.subsystem.resource.ManagementResourceRegistrationContext;
 import org.wildfly.subsystem.resource.ResourceDescriptor;
@@ -145,7 +147,7 @@ public class JGroupsSubsystemResourceDefinitionRegistrar implements SubsystemRes
         // Handle case where JGroups subsystem is added to a running server
         // In this case, the Infinispan subsystem may have already registered default group capabilities
         if (context.getProcessType().isServer() && !context.isBooting()) {
-            if (context.readResourceFromRoot(address.getParent(),false).hasChild(SubsystemResourceRegistration.of("infinispan").getPathElement())) {
+            if (context.readResourceFromRoot(address.getParent(), false).hasChild(SubsystemResourceRegistration.of("infinispan").getPathElement())) {
                 // Following restart, default group services will be installed by this handler, rather than the infinispan subsystem handler
                 context.addStep((ctx, operation) -> {
                     ctx.reloadRequired();
@@ -163,9 +165,9 @@ public class JGroupsSubsystemResourceDefinitionRegistrar implements SubsystemRes
                 ProtocolStackConfigurator configurator = loadDefaultProtocolStackConfigurator();
                 Map<Class<? extends Protocol>, Map<String, String>> protocolProperties = new IdentityHashMap<>();
                 try {
-                    for (ProtocolConfiguration config: configurator.getProtocolStack()) {
-                        String protocolClassName = Global.PREFIX + config.getProtocolName();
-                        Class<? extends Protocol> protocolClass = Protocol.class.getClassLoader().loadClass(protocolClassName).asSubclass(Protocol.class);
+                    for (ProtocolConfiguration config : configurator.getProtocolStack()) {
+                        // n.b. these defaults are only applicable to protocols loadable from the jgroups main module, so there is no module=".." attribute to account for
+                        Class<? extends Protocol> protocolClass = findProtocolClass(Protocol.class.getClassLoader(), config.getProtocolName());
                         protocolProperties.put(protocolClass, Collections.unmodifiableMap(config.getProperties()));
                     }
                 } catch (ClassNotFoundException e) {
@@ -179,15 +181,13 @@ public class JGroupsSubsystemResourceDefinitionRegistrar implements SubsystemRes
                 };
             }
         };
-        installers.add(ServiceInstaller.builder(factory).provides(ServiceNameFactory.resolveServiceName(ProtocolPropertiesRepository.SERVICE_DESCRIPTOR))
-                .blocking()
-                .build());
+        installers.add(ServiceInstaller.BlockingBuilder.of(factory, ServiceDependency.on(Capabilities.MANAGEMENT_EXECUTOR)).provides(ServiceNameFactory.resolveServiceName(ProtocolPropertiesRepository.SERVICE_DESCRIPTOR)).build());
 
         String defaultChannel = DEFAULT_CHANNEL.resolveModelAttribute(context, model).asStringOrNull();
         if (defaultChannel != null) {
-            installers.add(CapabilityServiceInstaller.builder(DEFAULT_CHANNEL_CAPABILITY, ServiceDependency.on(JGroupsServiceDescriptor.CHANNEL, defaultChannel)).build());
-            installers.add(CapabilityServiceInstaller.builder(DEFAULT_CHANNEL_CONFIGURATION_CAPABILITY, ServiceDependency.on(ChannelConfiguration.SERVICE_DESCRIPTOR, defaultChannel)).build());
-            installers.add(CapabilityServiceInstaller.builder(DEFAULT_CHANNEL_FACTORY_CAPABILITY, ServiceDependency.on(ForkChannelFactory.SERVICE_DESCRIPTOR, defaultChannel)).build());
+            installers.add(CapabilityServiceInstaller.BlockingBuilder.of(DEFAULT_CHANNEL_CAPABILITY, ServiceDependency.on(JGroupsServiceDescriptor.CHANNEL, defaultChannel)).startWhen(Installer.StartWhen.AVAILABLE).build());
+            installers.add(CapabilityServiceInstaller.BlockingBuilder.of(DEFAULT_CHANNEL_CONFIGURATION_CAPABILITY, ServiceDependency.on(ChannelConfiguration.SERVICE_DESCRIPTOR, defaultChannel)).startWhen(Installer.StartWhen.AVAILABLE).build());
+            installers.add(CapabilityServiceInstaller.BlockingBuilder.of(DEFAULT_CHANNEL_FACTORY_CAPABILITY, ServiceDependency.on(ForkChannelFactory.SERVICE_DESCRIPTOR, defaultChannel)).startWhen(Installer.StartWhen.AVAILABLE).build());
 
             if (!defaultChannel.equals(ModelDescriptionConstants.DEFAULT)) {
                 installers.add(new BinderServiceInstaller(JGroupsBindingFactory.CHANNEL.apply(ModelDescriptionConstants.DEFAULT), context.getCapabilityServiceName(JGroupsServiceDescriptor.CHANNEL, defaultChannel)));

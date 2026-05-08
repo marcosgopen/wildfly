@@ -17,7 +17,7 @@
         Maintain separation between the artifact id and the version to help prevent
         merge conflicts between commits changing the GA and those changing the V.
         -->
-        <version>38.0.0.Beta1-SNAPSHOT</version>
+        <version>40.0.0.Final-SNAPSHOT</version>
     </parent>
 
     <artifactId>wildfly-ts-integ-expansion</artifactId>
@@ -29,7 +29,9 @@
         <jbossas.ts.dir>${jbossas.ts.integ.dir}/..</jbossas.ts.dir>
         <jbossas.project.dir>${jbossas.ts.dir}/..</jbossas.project.dir>
         <surefire.forked.process.timeout>3600</surefire.forked.process.timeout>
-        <wildfly.build.output.dir>build/target/${server.output.dir.prefix}-${server.output.dir.version}</wildfly.build.output.dir>
+        <!-- For expansion tests we always use the 'build' module for pre-built installations, not 'ee-build'
+             So exclude ${testsuite.default.build.project.prefix} from the path -->
+        <wildfly.build.output.dir>${testsuite.default.build.project.root}/build/target/${server.output.dir.prefix}-${server.output.dir.qualifier}${server.output.dir.version}</wildfly.build.output.dir>
 
         <ts.glow.phase>none</ts.glow.phase>
         <ts.glow.config-name>standalone-microprofile.xml</ts.glow.config-name>
@@ -40,18 +42,6 @@
         <dependency.management.import.artifact>wildfly-standard-expansion-bom</dependency.management.import.artifact>
         <dependency.management.import.test.artifact>wildfly-standard-test-expansion-bom</dependency.management.import.test.artifact>
     </properties>
-
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>${full.maven.groupId}</groupId>
-                <artifactId>${dependency.management.import.test.artifact}</artifactId>
-                <version>${full.maven.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
 
     <dependencies>
         <!-- MicroProfile APIs -->
@@ -133,6 +123,11 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>jakarta.mvc</groupId>
+            <artifactId>jakarta.mvc-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>jakarta.persistence</groupId>
             <artifactId>jakarta.persistence-api</artifactId>
             <scope>provided</scope>
@@ -150,6 +145,13 @@
         <dependency>
             <groupId>jakarta.ws.rs</groupId>
             <artifactId>jakarta.ws.rs-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Jakarta MVC test dependencies -->
+        <dependency>
+            <groupId>org.eclipse.krazo</groupId>
+            <artifactId>krazo-core</artifactId>
             <scope>test</scope>
         </dependency>
 
@@ -220,7 +222,7 @@
             <scope>test</scope>
         </dependency>
         <!--
-            smallrye-reactive-messaging-kafka-test-companion doesn't pull in the kafka server dependencies
+            smallrye-reactive-messaging-kafka-test-companion doesn't pull in the kafka server dependencies,
             so we need to add them here
         -->
         <dependency>
@@ -237,12 +239,12 @@
         </dependency>
         <!-- Dependencies for embedded artemis -->
         <dependency>
-            <groupId>org.apache.activemq</groupId>
+            <groupId>org.apache.artemis</groupId>
             <artifactId>artemis-server</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.apache.activemq</groupId>
+            <groupId>org.apache.artemis</groupId>
             <artifactId>artemis-amqp-protocol</artifactId>
             <scope>test</scope>
         </dependency>
@@ -284,7 +286,7 @@
         </dependency>
         <dependency>
             <!-- Needed if people use compression.type=lz4 in their Kafka config -->
-            <groupId>org.lz4</groupId>
+            <groupId>at.yawk.lz4</groupId>
             <artifactId>lz4-java</artifactId>
             <scope>test</scope>
         </dependency>
@@ -394,7 +396,7 @@
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>kafka</artifactId>
+            <artifactId>testcontainers-kafka</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -433,7 +435,7 @@
         </dependency>
 
         <dependency>
-            <groupId>org.jboss.arquillian</groupId>
+            <groupId>org.arquillian.testcontainers</groupId>
             <artifactId>arquillian-testcontainers</artifactId>
             <scope>test</scope>
         </dependency>
@@ -447,9 +449,9 @@
                 <configuration>
                     <feature-packs>
                         <feature-pack>
-                            <groupId>${testsuite.full.galleon.pack.groupId}</groupId>
-                            <artifactId>${testsuite.full.galleon.pack.artifactId}</artifactId>
-                            <version>${testsuite.full.galleon.pack.version}</version>
+                            <groupId>${testsuite.full.feature.pack.groupId}</groupId>
+                            <artifactId>${testsuite.full.feature.pack.artifactId}</artifactId>
+                            <version>${testsuite.full.feature.pack.version}</version>
                         </feature-pack>
                     </feature-packs>
                     <config-name>${ts.glow.config-name}</config-name>
@@ -470,7 +472,7 @@
                             <expected-errors>
                                 <error>jakarta.naming.Context or InitialContext lookup. Enable verbose output to see the locations.</error>
                             </expected-errors>
-                            <expected-discovery>[cdi, ee-integration, ejb, ejb-lite, h2-datasource, jaxrs, jpa, jsonp, micrometer, microprofile-config, microprofile-fault-tolerance, microprofile-health, microprofile-jwt, microprofile-lra-coordinator, microprofile-lra-participant, microprofile-openapi, microprofile-reactive-messaging, microprofile-reactive-messaging-amqp, microprofile-reactive-messaging-kafka, microprofile-reactive-streams-operators, microprofile-rest-client, microprofile-telemetry, naming, opentelemetry, transactions]==>ee-core-profile-server,ejb,h2-datasource,jpa,micrometer,microprofile-fault-tolerance,microprofile-health,microprofile-jwt,microprofile-lra-coordinator,microprofile-lra-participant,microprofile-openapi,microprofile-reactive-messaging-amqp,microprofile-reactive-messaging-kafka,microprofile-rest-client,microprofile-telemetry</expected-discovery>
+                            <expected-discovery>[cdi, ee-integration, ejb, ejb-lite, h2-datasource, jaxrs, jpa, jsonp, micrometer, microprofile-config, microprofile-fault-tolerance, microprofile-health, microprofile-jwt, microprofile-lra-coordinator, microprofile-lra-participant, microprofile-openapi, microprofile-reactive-messaging, microprofile-reactive-messaging-amqp, microprofile-reactive-messaging-kafka, microprofile-reactive-streams-operators, microprofile-rest-client, microprofile-telemetry, mvc-krazo, naming, opentelemetry, transactions]==>ee-core-profile-server,ejb,h2-datasource,jpa,micrometer,microprofile-fault-tolerance,microprofile-health,microprofile-jwt,microprofile-lra-coordinator,microprofile-lra-participant,microprofile-openapi,microprofile-reactive-messaging-amqp,microprofile-reactive-messaging-kafka,microprofile-rest-client,microprofile-telemetry,mvc-krazo</expected-discovery>
                         </configuration>
                     </execution>
                 </executions>
@@ -662,6 +664,11 @@
                                 <phase>test</phase>
                                 <configuration>
                                     <reportNameSuffix>layers-test</reportNameSuffix>
+                                    <excludes combine-children="append">
+                                        <!-- https://issues.redhat.com/browse/WFMP-313 prevent provisioning preview stability packages
+                                             so don't run the mvc tests -->
+                                        <exclude>org/wildfly/test/integration/mvc/**</exclude>
+                                    </excludes>
                                 </configuration>
                             </execution>
                             <execution>
@@ -684,6 +691,20 @@
             </build>
         </profile>
 
+        <profile>
+            <id>preview-server-tests-config</id>
+            <activation>
+                <property>
+                    <name>preview-server-tests</name>
+                </property>
+            </activation>
+            <properties>
+                <!-- Use the WFP dependencies -->
+                <dependency.management.import.artifact>wildfly-preview-expansion-bom</dependency.management.import.artifact>
+                <dependency.management.import.test.artifact>wildfly-preview-test-expansion-bom</dependency.management.import.test.artifact>
+            </properties>
+        </profile>
+
         <!-- Test against WildFly Preview dist -->
         <!-- TODO convert this to a bootable jar setup once a release
              of the wildfly jar plugin with transformation support is available -->
@@ -697,12 +718,6 @@
             <properties>
                 <jboss.dist>${project.build.directory}/wildfly</jboss.dist>
 
-                <!-- Use the WFP dependencyManagement set.
-                     This is set in this profile in a parent module, but the explicit global override
-                     in this module takes precedence. -->
-                <dependency.management.import.artifact>wildfly-preview-expansion-bom</dependency.management.import.artifact>
-                <dependency.management.import.test.artifact>wildfly-preview-test-expansion-bom</dependency.management.import.test.artifact>
-                <testsuite.ee.galleon.pack.artifactId>wildfly-preview-feature-pack</testsuite.ee.galleon.pack.artifactId>
                 <ts.glow.phase>test-compile</ts.glow.phase>
                 <ts.config-as.copy-mgmt-users.phase>test</ts.config-as.copy-mgmt-users.phase>
             </properties>
@@ -751,6 +766,7 @@
                                         <jboss-maven-dist/>
                                         <jboss-fork-embedded>${galleon.fork.embedded}</jboss-fork-embedded>
                                         <optional-packages>passive+</optional-packages>
+                                        <stability-level>preview</stability-level>
                                     </galleon-options>
                                     <provisioning-file>target/glow-scan/provisioning.xml</provisioning-file>
                                 </configuration>
@@ -948,6 +964,11 @@
                                             org.wildfly.arquillian:wildfly-arquillian-container-managed
                                         </classpathDependencyExclude>
                                     </classpathDependencyExcludes>
+                                    <excludes combine-children="append">
+                                        <!-- https://issues.redhat.com/browse/WFMP-313 prevent provisioning preview stability packages
+                                             so don't run the mvc tests -->
+                                        <exclude>org/wildfly/test/integration/mvc/**</exclude>
+                                    </excludes>
                                 </configuration>
                             </execution>
                             <execution>
@@ -977,12 +998,6 @@
                 <ts.glow.phase>test-compile</ts.glow.phase>
                 <ts.glow.config-name>standalone.xml</ts.glow.config-name>
                 <ts.bootable-jar-packaging.phase>test-compile</ts.bootable-jar-packaging.phase>
-
-                <!-- Use the WFP dependencyManagement set.
-                     This is set in this profile in a parent module, but the explicit global override
-                     in this module takes precedence. -->
-                <dependency.management.import.artifact>wildfly-preview-expansion-bom</dependency.management.import.artifact>
-                <dependency.management.import.test.artifact>wildfly-preview-test-expansion-bom</dependency.management.import.test.artifact>
             </properties>
             <build>
                 <plugins>

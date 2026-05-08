@@ -32,18 +32,17 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 import javax.naming.NamingException;
 
 import org.jboss.as.controller.AbstractBoottimeAddStepHandler;
+import org.jboss.as.controller.CapabilityServiceTarget;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.ProcessType;
 import org.jboss.as.controller.RequirementServiceTarget;
 import org.jboss.as.controller.RunningMode;
 import org.jboss.as.controller.ServiceNameFactory;
-import org.jboss.as.controller.capability.CapabilityServiceSupport;
 import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.ejb3.component.allowedmethods.AllowedMethodsInformation;
@@ -175,8 +174,6 @@ class EJB3SubsystemAdd extends AbstractBoottimeAddStepHandler {
 
     private static final String REMOTING_ENDPOINT_CAPABILITY = "org.wildfly.remoting.endpoint";
 
-    private static final String ELYTRON_JACC_CAPABILITY = "org.wildfly.security.jacc-policy";
-
     private final AtomicReference<String> defaultSecurityDomainName;
     private final Iterable<ApplicationSecurityDomainConfig> knownApplicationSecurityDomains;
     private final Iterable<String> outflowSecurityDomains;
@@ -269,9 +266,9 @@ class EJB3SubsystemAdd extends AbstractBoottimeAddStepHandler {
         // Install the server association service
         final AssociationService associationService = new AssociationService();
         final ServiceName suspendControllerServiceName = context.getCapabilityServiceName("org.wildfly.server.suspend-controller", SuspendController.class);
-        final ServiceBuilder<AssociationService> associationServiceBuilder = context.getServiceTarget().addService(AssociationService.SERVICE_NAME, associationService);
+        final CapabilityServiceTarget serviceTarget = context.getCapabilityServiceTarget();
+        final ServiceBuilder<AssociationService> associationServiceBuilder = serviceTarget.addService(AssociationService.SERVICE_NAME, associationService);
         associationServiceBuilder.addDependency(DeploymentRepositoryService.SERVICE_NAME, DeploymentRepository.class, associationService.getDeploymentRepositoryInjector())
-                .addDependency(suspendControllerServiceName, SuspendController.class, associationService.getSuspendControllerInjector())
                 .addDependency(ServerEnvironmentService.SERVICE_NAME, ServerEnvironment.class, associationService.getServerEnvironmentServiceInjector())
                 .setInitialMode(ServiceController.Mode.LAZY);
 
@@ -296,7 +293,7 @@ class EJB3SubsystemAdd extends AbstractBoottimeAddStepHandler {
 
         //setup the substitution service, that translates between ejb proxies and IIOP stubs
         final RemoteObjectSubstitutionService substitutionService = new RemoteObjectSubstitutionService();
-        context.getServiceTarget().addService(RemoteObjectSubstitutionService.SERVICE_NAME, substitutionService)
+        serviceTarget.addService(RemoteObjectSubstitutionService.SERVICE_NAME, substitutionService)
                 .addDependency(DeploymentRepositoryService.SERVICE_NAME, DeploymentRepository.class, substitutionService.getDeploymentRepositoryInjectedValue())
                 .install();
 
@@ -308,10 +305,10 @@ class EJB3SubsystemAdd extends AbstractBoottimeAddStepHandler {
 
         final ModelNode defaultDistinctName = EJB3SubsystemRootResourceDefinition.DEFAULT_DISTINCT_NAME.resolveModelAttribute(context, model);
         final DefaultDistinctNameService defaultDistinctNameService = new DefaultDistinctNameService(defaultDistinctName.isDefined() ? defaultDistinctName.asString() : null);
-        context.getServiceTarget().addService(DefaultDistinctNameService.SERVICE_NAME, defaultDistinctNameService).install();
+        serviceTarget.addService(DefaultDistinctNameService.SERVICE_NAME, defaultDistinctNameService).install();
         final ModelNode ejbNameRegex = EJB3SubsystemRootResourceDefinition.ALLOW_EJB_NAME_REGEX.resolveModelAttribute(context, model);
         final EjbNameRegexService ejbNameRegexService = new EjbNameRegexService(ejbNameRegex.isDefined() ? ejbNameRegex.asBoolean() : false);
-        context.getServiceTarget().addService(EjbNameRegexService.SERVICE_NAME, ejbNameRegexService).install();
+        serviceTarget.addService(EjbNameRegexService.SERVICE_NAME, ejbNameRegexService).install();
 
         // set the default security domain name in the deployment unit processor, configured at the subsystem level
         final ModelNode defaultSecurityDomainModelNode = EJB3SubsystemRootResourceDefinition.DEFAULT_SECURITY_DOMAIN.resolveModelAttribute(context, model);
@@ -326,13 +323,10 @@ class EJB3SubsystemAdd extends AbstractBoottimeAddStepHandler {
         final ModelNode defaultStatefulSessionTimeout = EJB3SubsystemRootResourceDefinition.DEFAULT_STATEFUL_BEAN_SESSION_TIMEOUT.resolveModelAttribute(context, model);
         final AtomicLong defaultTimeout = defaultStatefulSessionTimeout.isDefined() ? new AtomicLong(defaultStatefulSessionTimeout.asLong()) : DefaultStatefulBeanSessionTimeoutWriteHandler.INITIAL_TIMEOUT_VALUE;
         final ValueService defaultStatefulSessionTimeoutService = new ValueService(defaultTimeout);
-        context.getServiceTarget().addService(DefaultStatefulBeanSessionTimeoutWriteHandler.SERVICE_NAME, defaultStatefulSessionTimeoutService).install();
+        serviceTarget.addService(DefaultStatefulBeanSessionTimeoutWriteHandler.SERVICE_NAME, defaultStatefulSessionTimeoutService).install();
 
         final boolean defaultMdbPoolAvailable = model.hasDefined(DEFAULT_MDB_INSTANCE_POOL);
         final boolean defaultSlsbPoolAvailable = model.hasDefined(DEFAULT_SLSB_INSTANCE_POOL);
-
-        CapabilityServiceSupport capabilitySupport = context.getCapabilityServiceSupport();
-        final boolean elytronJacc = capabilitySupport.hasCapability(ELYTRON_JACC_CAPABILITY);
 
         context.addStep(new AbstractDeploymentChainStep() {
             @Override
@@ -361,9 +355,7 @@ class EJB3SubsystemAdd extends AbstractBoottimeAddStepHandler {
                 processorTarget.addDeploymentProcessor(EJB3Extension.SUBSYSTEM_NAME, Phase.POST_MODULE, Phase.POST_MODULE_EE_COMPONENT_SUSPEND, new EJBComponentSuspendDeploymentUnitProcessor());
                 processorTarget.addDeploymentProcessor(EJB3Extension.SUBSYSTEM_NAME, Phase.POST_MODULE, Phase.POST_MODULE_EE_COMPONENT_SUSPEND + 1, new EjbClientContextSetupProcessor()); //TODO: real phase numbers
                 processorTarget.addDeploymentProcessor(EJB3Extension.SUBSYSTEM_NAME, Phase.POST_MODULE, Phase.POST_MODULE_EE_COMPONENT_SUSPEND + 2, new StartupAwaitDeploymentUnitProcessor());
-                if (elytronJacc) {
-                    processorTarget.addDeploymentProcessor(EJB3Extension.SUBSYSTEM_NAME, Phase.INSTALL, Phase.INSTALL_EJB_JACC_PROCESSING, new JaccEjbDeploymentProcessor(ELYTRON_JACC_CAPABILITY));
-                }
+                processorTarget.addDeploymentProcessor(EJB3Extension.SUBSYSTEM_NAME, Phase.INSTALL, Phase.INSTALL_EJB_JACC_PROCESSING, new JaccEjbDeploymentProcessor());
                 processorTarget.addDeploymentProcessor(EJB3Extension.SUBSYSTEM_NAME, Phase.CLEANUP, Phase.CLEANUP_EJB, new EjbCleanUpProcessor());
 
                 if (!appclient) {
@@ -480,9 +472,7 @@ class EJB3SubsystemAdd extends AbstractBoottimeAddStepHandler {
 
         ExceptionLoggingWriteHandler.INSTANCE.updateOrCreateDefaultExceptionLoggingEnabledService(context, model);
 
-        final ServiceTarget serviceTarget = context.getServiceTarget();
-
-        context.getServiceTarget().addService(DeploymentRepositoryService.SERVICE_NAME, new DeploymentRepositoryService()).install();
+        serviceTarget.addService(DeploymentRepositoryService.SERVICE_NAME, new DeploymentRepositoryService()).install();
 
         addRemoteInvocationServices(context, model, appclient);
         // add clustering service
@@ -490,14 +480,14 @@ class EJB3SubsystemAdd extends AbstractBoottimeAddStepHandler {
 
         // add user transaction access control service
         final EJB3UserTransactionAccessControlService userTxAccessControlService = new EJB3UserTransactionAccessControlService();
-        context.getServiceTarget().addService(EJB3UserTransactionAccessControlService.SERVICE_NAME, userTxAccessControlService)
+        serviceTarget.addService(EJB3UserTransactionAccessControlService.SERVICE_NAME, userTxAccessControlService)
                 .addDependency(UserTransactionAccessControlService.SERVICE_NAME, UserTransactionAccessControlService.class, userTxAccessControlService.getUserTransactionAccessControlServiceInjector())
                 .install();
 
         // add ejb suspend handler service
         boolean enableGracefulShutdown = EJB3SubsystemRootResourceDefinition.ENABLE_GRACEFUL_TXN_SHUTDOWN.resolveModelAttribute(context, model).asBoolean();
         final EJBSuspendHandlerService ejbSuspendHandlerService = new EJBSuspendHandlerService(enableGracefulShutdown);
-        context.getServiceTarget().addService(EJBSuspendHandlerService.SERVICE_NAME, ejbSuspendHandlerService)
+        serviceTarget.addService(EJBSuspendHandlerService.SERVICE_NAME, ejbSuspendHandlerService)
                 .addDependency(suspendControllerServiceName, SuspendController.class, ejbSuspendHandlerService.getSuspendControllerInjectedValue())
                 .addDependency(TxnServices.JBOSS_TXN_LOCAL_TRANSACTION_CONTEXT, LocalTransactionContext.class, ejbSuspendHandlerService.getLocalTransactionContextInjectedValue())
                 .addDependency(DeploymentRepositoryService.SERVICE_NAME, DeploymentRepository.class, ejbSuspendHandlerService.getDeploymentRepositoryInjectedValue())
@@ -506,7 +496,7 @@ class EJB3SubsystemAdd extends AbstractBoottimeAddStepHandler {
         if (!appclient) {
             // create the POA Registry use by iiop
             final POARegistry poaRegistry = new POARegistry();
-            context.getServiceTarget().addService(POARegistry.SERVICE_NAME, poaRegistry)
+            serviceTarget.addService(POARegistry.SERVICE_NAME, poaRegistry)
                     .addDependency(CorbaPOAService.ROOT_SERVICE_NAME, POA.class, poaRegistry.getRootPOA())
                     .setInitialMode(ServiceController.Mode.PASSIVE)
                     .install();
@@ -517,7 +507,7 @@ class EJB3SubsystemAdd extends AbstractBoottimeAddStepHandler {
             if(context.hasOptionalCapability(UNDERTOW_HTTP_INVOKER_CAPABILITY_NAME, EJB3SubsystemRootResourceDefinition.EJB_CAPABILITY.getName(), null)) {
                 EJB3RemoteHTTPService service = new EJB3RemoteHTTPService(FilterSpecClassResolverFilter.getFilterForOperationContext(context));
 
-                context.getServiceTarget().addService(EJB3RemoteHTTPService.SERVICE_NAME, service)
+                serviceTarget.addService(EJB3RemoteHTTPService.SERVICE_NAME, service)
                         .addDependency(context.getCapabilityServiceName(UNDERTOW_HTTP_INVOKER_CAPABILITY_NAME, PathHandler.class), PathHandler.class, service.getPathHandlerInjectedValue())
                         .addDependency(TxnServices.JBOSS_TXN_LOCAL_TRANSACTION_CONTEXT, LocalTransactionContext.class, service.getLocalTransactionContextInjectedValue())
                         .addDependency(AssociationService.SERVICE_NAME, AssociationService.class, service.getAssociationServiceInjectedValue())
@@ -541,7 +531,7 @@ class EJB3SubsystemAdd extends AbstractBoottimeAddStepHandler {
     private static void addRemoteInvocationServices(final OperationContext context,
                                              final ModelNode ejbSubsystemModel, final boolean appclient) throws OperationFailedException {
 
-        final ServiceTarget serviceTarget = context.getServiceTarget();
+        final ServiceTarget serviceTarget = context.getCapabilityServiceTarget();
         //add the default EjbClientContext
 
         final EJBClientConfiguratorService clientConfiguratorService = new EJBClientConfiguratorService();
@@ -555,7 +545,7 @@ class EJB3SubsystemAdd extends AbstractBoottimeAddStepHandler {
 
         //TODO: This should be managed
         final EJBClientContextService clientContextService = new EJBClientContextService(true);
-        final ServiceBuilder<EJBClientContextService> clientContextServiceBuilder = context.getServiceTarget().addService(EJBClientContextService.DEFAULT_SERVICE_NAME, clientContextService);
+        final ServiceBuilder<EJBClientContextService> clientContextServiceBuilder = serviceTarget.addService(EJBClientContextService.DEFAULT_SERVICE_NAME, clientContextService);
 
         clientContextServiceBuilder.addDependency(EJBClientConfiguratorService.SERVICE_NAME, EJBClientConfiguratorService.class, clientContextService.getConfiguratorServiceInjector());
 
@@ -599,23 +589,23 @@ class EJB3SubsystemAdd extends AbstractBoottimeAddStepHandler {
                 public ServiceController<?> install(RequirementServiceTarget target) {
                     // Install on-demand singleton service
                     // We don't want this to start until a deployment requires it
-                    ServiceController<?> controller = org.wildfly.service.ServiceInstaller.builder(Functions.constantSupplier(Boolean.TRUE))
+                    ServiceController<?> controller = org.wildfly.service.ServiceInstaller.BlockingBuilder.of(Functions.constantSupplier(Boolean.TRUE))
                             .provides(CLUSTERED_SINGLETON_CAPABILITY.getCapabilityServiceName())
                             .build()
                             .install(targetFactory.get().createSingletonServiceTarget(target));
 
                     // Install well-known on-demand service that, once started, will force singleton service instrumentation to start.
-                    ServiceInstaller.builder(Functions.constantSupplier(Boolean.TRUE))
+                    ServiceInstaller.BlockingBuilder.of(Functions.constantSupplier(Boolean.TRUE))
                             .provides(ServiceNameFactory.resolveServiceName(CLUSTERED_SINGLETON_BARRIER))
                             // N.B. Depend on ServiceName(s) provided by singleton service instrumentation
-                            .requires(controller.provides().stream().map(ServiceDependency::on).collect(Collectors.toList()))
+                            .requires(controller.provides().stream().map(ServiceDependency::on).toList())
                             .build()
                             .install(target);
 
                     return controller;
                 }
             };
-            ServiceInstaller.builder(installer, context.getCapabilityServiceSupport()).requires(targetFactory).build().install(context);
+            ServiceInstaller.Builder.of(installer, context.getCapabilityServiceSupport()).requires(targetFactory).build().install(context);
         }
     }
 

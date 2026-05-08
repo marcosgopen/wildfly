@@ -70,7 +70,7 @@ class JaxrsSubsystemAdd extends AbstractBoottimeAddStepHandler {
 
     protected void performBoottime(final OperationContext context, ModelNode operation, Resource resource) throws OperationFailedException {
 
-        final ServiceTarget serviceTarget = context.getServiceTarget();
+        final ServiceTarget serviceTarget = context.getCapabilityServiceTarget();
         JaxrsLogger.JAXRS_LOGGER.resteasyVersion(ResteasyDeployment.class.getPackage().getImplementationVersion());
 
         final JaxrsServerConfig contextConfiguration = createServerConfig(operation, context);
@@ -122,6 +122,8 @@ class JaxrsSubsystemAdd extends AbstractBoottimeAddStepHandler {
         addContextParameter(config, JaxrsAttribute.RESTEASY_MEDIA_TYPE_MAPPINGS, context, configuration, MAP_TO_STRING);
 
         addContextParameter(config, JaxrsAttribute.RESTEASY_MEDIA_TYPE_PARAM_MAPPING, context, configuration);
+
+        addContextParameter(config, JaxrsAttribute.RESTEASY_ORIGINAL_WEBAPPLICATIONEXCEPTION_BEHAVIOR, context, configuration);
 
         addContextParameter(config, JaxrsAttribute.RESTEASY_PATCHFILTER_DISABLED, context, configuration);
 

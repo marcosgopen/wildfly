@@ -271,7 +271,7 @@ public class ExternalPooledConnectionFactoryService implements Service<ExternalP
             Set<String> connectorsSocketBindings,
             Set<String> sslContextNames,
             ModelNode model) throws OperationFailedException {
-        ServiceBuilder<?> serviceBuilder = context.getServiceTarget().addService(serviceName);
+        ServiceBuilder<?> serviceBuilder = context.getCapabilityServiceTarget().addService(serviceName);
         serviceBuilder.requires(context.getCapabilityServiceName(MessagingServices.LOCAL_TRANSACTION_PROVIDER_CAPABILITY, null));
         // ensures that Artemis client thread pools are not stopped before any deployment depending on a pooled-connection-factory
         serviceBuilder.requires(MessagingServices.ACTIVEMQ_CLIENT_THREAD_POOL);
@@ -477,8 +477,6 @@ public class ExternalPooledConnectionFactoryService implements Service<ExternalP
 
             configureCredential(properties);
 
-            WildFlyRecoveryRegistry.container = container;
-
             OutboundResourceAdapter outbound = createOutbound(outboundProperties);
             InboundResourceAdapter inbound = createInbound(inboundProperties);
             ResourceAdapter ra = createResourceAdapter15(properties, outbound, inbound);
@@ -514,6 +512,7 @@ public class ExternalPooledConnectionFactoryService implements Service<ExternalP
                                     activator.getCcmInjector());
             sb.requires(NamingService.SERVICE_NAME);
             sb.requires(capabilityServiceSupport.getCapabilityServiceName(MessagingServices.LOCAL_TRANSACTION_PROVIDER_CAPABILITY));
+            WildFlyRecoveryRegistry.supplier = sb.requires(capabilityServiceSupport.getCapabilityServiceName(MessagingServices.TRANSACTION_XA_RESOURCE_RECOVERY_REGISTRY_CAPABILITY));
             sb.requires(ConnectorServices.BOOTSTRAP_CONTEXT_SERVICE.append("default"));
             sb.setInitialMode(ServiceController.Mode.PASSIVE).install();
 

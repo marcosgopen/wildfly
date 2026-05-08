@@ -4,19 +4,15 @@
  */
 package org.wildfly.clustering.infinispan.service;
 
-import java.util.List;
-import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 import org.infinispan.commons.dataconversion.MediaType;
-import org.infinispan.configuration.cache.CacheMode;
 import org.infinispan.configuration.cache.ConfigurationBuilder;
-import org.infinispan.configuration.cache.StorageType;
 import org.infinispan.manager.EmbeddedCacheManager;
 import org.jboss.as.controller.RequirementServiceTarget;
 import org.jboss.msc.service.ServiceController;
 import org.wildfly.clustering.server.service.BinaryServiceConfiguration;
+import org.wildfly.service.BlockingLifecycle;
 import org.wildfly.subsystem.service.ServiceDependency;
 import org.wildfly.subsystem.service.ServiceInstaller;
 
@@ -48,36 +44,44 @@ public class CacheConfigurationServiceInstaller implements ServiceInstaller {
     public ServiceController<?> install(RequirementServiceTarget target) {
         ServiceDependency<EmbeddedCacheManager> manager = this.configuration.getServiceDependency(InfinispanServiceDescriptor.CACHE_CONTAINER);
         String cacheName = this.configuration.getChildName();
-        Consumer<org.infinispan.configuration.cache.Configuration> start = new Consumer<>() {
+        Function<org.infinispan.configuration.cache.Configuration, BlockingLifecycle> lifecycle = new Function<>() {
             @Override
-            public void accept(org.infinispan.configuration.cache.Configuration configuration) {
-                manager.get().defineConfiguration(cacheName, configuration);
+            public BlockingLifecycle apply(org.infinispan.configuration.cache.Configuration configuration) {
+                return new BlockingLifecycle() {
+                    @Override
+                    public boolean isStarted() {
+                        return manager.get().cacheConfigurationExists(cacheName);
+                    }
+
+                    @Override
+                    public void start() {
+                        manager.get().defineConfiguration(cacheName, configuration);
+                    }
+
+                    @Override
+                    public void stop() {
+                        manager.get().undefineConfiguration(cacheName);
+                    }
+                };
             }
         };
-        Consumer<org.infinispan.configuration.cache.Configuration> stop = new Consumer<>() {
-            @Override
-            public void accept(org.infinispan.configuration.cache.Configuration configuration) {
-                manager.get().undefineConfiguration(cacheName);
-            }
-        };
-        Supplier<org.infinispan.configuration.cache.Configuration> factory = this.builder.map(new Function<>() {
+        ServiceDependency<org.infinispan.configuration.cache.Configuration> factory = this.builder.map(new Function<>() {
             @Override
             public org.infinispan.configuration.cache.Configuration apply(ConfigurationBuilder builder) {
                 // Auto-enable simple cache optimization if cache is local, on-heap, non-transactional, and non-persistent, and statistics are disabled
-                builder.simpleCache((builder.clustering().cacheMode() == CacheMode.LOCAL) && (builder.memory().storage() == StorageType.HEAP) && !builder.transaction().transactionMode().isTransactional() && builder.persistence().stores().isEmpty() && !builder.statistics().create().enabled());
+                builder.simpleCache(!builder.clustering().cacheMode().isClustered() && builder.memory().storage().canStoreReferences() && !builder.transaction().transactionMode().isTransactional() && builder.persistence().stores().isEmpty() && !builder.statistics().create().enabled());
 
                 // Set media-type appropriate for the configured memory store
-                builder.encoding().mediaType(builder.memory().storage().canStoreReferences() ? MediaType.APPLICATION_OBJECT : manager.get().getCacheManagerConfiguration().serialization().marshaller().mediaType());
+                builder.encoding().mediaType(builder.memory().storage().canStoreReferences() ? MediaType.APPLICATION_OBJECT : MediaType.APPLICATION_OCTET_STREAM);
 
                 return builder.build();
             }
         });
 
-        return ServiceInstaller.builder(factory)
+        return ServiceInstaller.BlockingBuilder.of(factory)
                 .provides(this.configuration.resolveServiceName(InfinispanServiceDescriptor.CACHE_CONFIGURATION))
-                .requires(List.of(this.builder, manager))
-                .onStart(start)
-                .onStop(stop)
+                .requires(manager)
+                .withLifecycle(lifecycle)
                 .build()
                 .install(target);
     }

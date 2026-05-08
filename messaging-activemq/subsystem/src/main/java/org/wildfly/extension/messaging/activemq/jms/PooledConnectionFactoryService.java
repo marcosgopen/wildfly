@@ -273,7 +273,7 @@ public class PooledConnectionFactoryService implements Service<Void> {
                                         ServiceName serviceName,
                                         PooledConnectionFactoryService service,
                                         ModelNode model) throws OperationFailedException {
-        ServiceBuilder serviceBuilder = createServiceBuilder(context.getServiceTarget(), serverServiceName, serviceName, service);
+        ServiceBuilder serviceBuilder = createServiceBuilder(context.getCapabilityServiceTarget(), serverServiceName, serviceName, service);
         ModelNode credentialReference = ConnectionFactoryAttributes.Pooled.CREDENTIAL_REFERENCE.resolveModelAttribute(context, model);
         if (credentialReference.isDefined()) {
             service.getCredentialSourceSupplierInjector().inject(CredentialReference.getCredentialSourceSupplier(context, ConnectionFactoryAttributes.Pooled.CREDENTIAL_REFERENCE, model, serviceBuilder));
@@ -416,8 +416,6 @@ public class PooledConnectionFactoryService implements Service<Void> {
             inboundProperties.add(simpleProperty15("queuePrefix", String.class.getName(), JMS_QUEUE_PREFIX));
             inboundProperties.add(simpleProperty15("topicPrefix", String.class.getName(), JMS_TOPIC_PREFIX));
 
-            WildFlyRecoveryRegistry.container = container;
-
             OutboundResourceAdapter outbound = createOutbound(outboundProperties);
             InboundResourceAdapter inbound = createInbound(inboundProperties);
             ResourceAdapter ra = createResourceAdapter15(properties, outbound, inbound);
@@ -454,6 +452,7 @@ public class PooledConnectionFactoryService implements Service<Void> {
             sb.requires(ActiveMQActivationService.getServiceName(getActiveMQServiceName(serverName)));
             sb.requires(NamingService.SERVICE_NAME);
             sb.requires(MessagingServices.getCapabilityServiceName(MessagingServices.LOCAL_TRANSACTION_PROVIDER_CAPABILITY));
+            WildFlyRecoveryRegistry.supplier = sb.requires(MessagingServices.getCapabilityServiceName(MessagingServices.TRANSACTION_XA_RESOURCE_RECOVERY_REGISTRY_CAPABILITY));
             sb.requires(ConnectorServices.BOOTSTRAP_CONTEXT_SERVICE.append("default"));
             sb.setInitialMode(ServiceController.Mode.PASSIVE).install();
             // Mock the deployment service to allow it to start

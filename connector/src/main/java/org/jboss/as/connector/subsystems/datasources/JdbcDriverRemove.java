@@ -60,7 +60,7 @@ public class JdbcDriverRemove extends AbstractRemoveStepHandler {
         final String xaDataSourceClassName = model.hasDefined(DRIVER_XA_DATASOURCE_CLASS_NAME.getName()) ? model.get(
                 DRIVER_XA_DATASOURCE_CLASS_NAME.getName()).asString() : null;
 
-        final ServiceTarget target = context.getServiceTarget();
+        final ServiceTarget target = context.getCapabilityServiceTarget();
 
         final String moduleId;
         final Module module;
@@ -72,7 +72,8 @@ public class JdbcDriverRemove extends AbstractRemoveStepHandler {
             context.getFailureDescription().set(ConnectorLogger.ROOT_LOGGER.missingDependencyInModuleDriver(moduleName, e.getMessage()));
             return;
         } catch (ModuleLoadException e) {
-            context.getFailureDescription().set(ConnectorLogger.ROOT_LOGGER.failedToLoadModuleDriver(moduleName));
+            context.getFailureDescription().set(ConnectorLogger.ROOT_LOGGER.failedToLoadModuleDriver(moduleName, e.getLocalizedMessage(),
+                    e.getCause() != null ? e.getCause().getLocalizedMessage() : "-"));
             return;
         }
 

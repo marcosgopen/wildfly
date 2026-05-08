@@ -100,6 +100,8 @@ public abstract class JaxrsAttribute {
             new SensitivityClassification(JaxrsExtension.SUBSYSTEM_NAME, "tracing-management", false, false, true)
     );
 
+    @SuppressWarnings("DeprecatedIsStillUsed")
+    @Deprecated
     public static final SimpleAttributeDefinition JAXRS_2_0_REQUEST_MATCHING = new SimpleAttributeDefinitionBuilder(JaxrsConstants.JAXRS_2_0_REQUEST_MATCHING, ModelType.BOOLEAN)
             .setRequired(false)
             .setAllowExpression(true)
@@ -108,6 +110,7 @@ public abstract class JaxrsAttribute {
             .setAttributeGroup(RESTEASY_PARAMETER_GROUP)
             .setAttributeMarshaller(AttributeMarshallers.SIMPLE_ELEMENT)
             .setAttributeParser(AttributeParsers.SIMPLE_ELEMENT)
+            .setDeprecated(JaxrsExtension.JaxrsSubsystemModel.VERSION_6_0_0.getVersion(), true)
             .setRestartAllServices()
             .build();
 
@@ -236,6 +239,17 @@ public abstract class JaxrsAttribute {
             .setAllowExpression(true)
             .setAttributeGroup(RESTEASY_PARAMETER_GROUP)
             .setValidator(new ModelTypeValidator(ModelType.STRING, true))
+            .setAttributeMarshaller(AttributeMarshallers.SIMPLE_ELEMENT)
+            .setAttributeParser(AttributeParsers.SIMPLE_ELEMENT)
+            .setRestartAllServices()
+            .build();
+
+    static final SimpleAttributeDefinition RESTEASY_ORIGINAL_WEBAPPLICATIONEXCEPTION_BEHAVIOR =
+            new SimpleAttributeDefinitionBuilder("resteasy-original-webapplicationexception-behavior", ModelType.BOOLEAN)
+            .setRequired(false)
+            .setAllowExpression(true)
+            .setValidator(new ModelTypeValidator(ModelType.BOOLEAN, false))
+            .setDefaultValue(ModelNode.FALSE)
             .setAttributeMarshaller(AttributeMarshallers.SIMPLE_ELEMENT)
             .setAttributeParser(AttributeParsers.SIMPLE_ELEMENT)
             .setRestartAllServices()
@@ -376,6 +390,7 @@ public abstract class JaxrsAttribute {
             RESTEASY_LANGUAGE_MAPPINGS,
             RESTEASY_MEDIA_TYPE_MAPPINGS,
             RESTEASY_MEDIA_TYPE_PARAM_MAPPING,
+            RESTEASY_ORIGINAL_WEBAPPLICATIONEXCEPTION_BEHAVIOR,
             RESTEASY_PATCHFILTER_DISABLED,
             RESTEASY_PREFER_JACKSON_OVER_JSONB,
             RESTEASY_PROVIDERS,

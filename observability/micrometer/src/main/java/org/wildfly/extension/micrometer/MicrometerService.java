@@ -9,6 +9,12 @@ import static org.wildfly.extension.micrometer.MicrometerExtensionLogger.MICROME
 import java.io.IOException;
 import java.util.function.Function;
 
+import io.micrometer.core.instrument.binder.jvm.ClassLoaderMetrics;
+import io.micrometer.core.instrument.binder.jvm.JvmGcMetrics;
+import io.micrometer.core.instrument.binder.jvm.JvmMemoryMetrics;
+import io.micrometer.core.instrument.binder.jvm.JvmThreadDeadlockMetrics;
+import io.micrometer.core.instrument.binder.jvm.JvmThreadMetrics;
+import io.micrometer.core.instrument.binder.system.ProcessorMetrics;
 import org.jboss.as.controller.LocalModelControllerClient;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.ProcessStateNotifier;
@@ -18,9 +24,8 @@ import org.wildfly.extension.micrometer.jmx.JmxMicrometerCollector;
 import org.wildfly.extension.micrometer.metrics.MetricRegistration;
 import org.wildfly.extension.micrometer.metrics.MicrometerCollector;
 import org.wildfly.extension.micrometer.registry.WildFlyCompositeRegistry;
-import org.wildfly.extension.micrometer.registry.WildFlyRegistry;
 
-public class MicrometerService implements AutoCloseable {
+public class MicrometerService {
     private final WildFlyMicrometerConfig micrometerConfig;
     private final LocalModelControllerClient modelControllerClient;
     private final ProcessStateNotifier processStateNotifier;
@@ -39,18 +44,13 @@ public class MicrometerService implements AutoCloseable {
     }
 
     public void start() {
-        micrometerCollector = new MicrometerCollector(modelControllerClient, processStateNotifier, micrometerRegistry,
-            micrometerConfig.getSubsystemFilter());
-
+        registerSystemMetrics();
+        registerModelMetrics();
         registerJmxMetrics();
     }
 
     public WildFlyCompositeRegistry getMicrometerRegistry() {
         return micrometerRegistry;
-    }
-
-    public void addRegistry(WildFlyRegistry registry) {
-        micrometerRegistry.addRegistry(registry);
     }
 
     public synchronized MetricRegistration collectResourceMetrics(final Resource resource,
@@ -59,17 +59,26 @@ public class MicrometerService implements AutoCloseable {
         return micrometerCollector.collectResourceMetrics(resource, mrr, addressResolver);
     }
 
+    private void registerSystemMetrics() {
+        new ClassLoaderMetrics().bindTo(micrometerRegistry);
+        new JvmMemoryMetrics().bindTo(micrometerRegistry);
+        new JvmGcMetrics().bindTo(micrometerRegistry);
+        new ProcessorMetrics().bindTo(micrometerRegistry);
+        new JvmThreadMetrics().bindTo(micrometerRegistry);
+        new JvmThreadDeadlockMetrics().bindTo(micrometerRegistry);
+    }
+
+    private void registerModelMetrics() {
+        micrometerCollector = new MicrometerCollector(modelControllerClient, processStateNotifier, micrometerRegistry,
+                micrometerConfig.getSubsystemFilter());
+    }
+
     private void registerJmxMetrics() {
         try {
             new JmxMicrometerCollector(micrometerRegistry).init();
         } catch (IOException e) {
             throw MICROMETER_LOGGER.failedInitializeJMXRegistrar(e);
         }
-    }
-
-    @Override
-    public void close() {
-        micrometerRegistry.close();
     }
 
     public static class Builder {

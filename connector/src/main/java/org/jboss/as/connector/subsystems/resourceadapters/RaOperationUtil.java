@@ -91,6 +91,7 @@ import org.jboss.as.connector.metadata.xmldescriptors.IronJacamarXmlDescriptor;
 import org.jboss.as.connector.services.resourceadapters.deployment.InactiveResourceAdapterDeploymentService;
 import org.jboss.as.connector.services.resourceadapters.deployment.ResourceAdapterXmlDeploymentService;
 import org.jboss.as.connector.util.ConnectorServices;
+import org.jboss.as.connector.util.CopyOnWriteArrayListMultiMap;
 import org.jboss.as.connector.util.ModelNodeUtil;
 import org.jboss.as.connector.util.RaServicesFactory;
 import org.jboss.as.controller.ModuleIdentifierUtil;
@@ -384,7 +385,7 @@ public class RaOperationUtil {
     }
 
     public static ServiceName installRaServices(OperationContext context, String name, ModifiableResourceAdapter resourceAdapter, final List<ServiceController<?>> newControllers) {
-        final ServiceTarget serviceTarget = context.getServiceTarget();
+        final ServiceTarget serviceTarget = context.getCapabilityServiceTarget();
 
         final ServiceController<?> resourceAdaptersService = context.getServiceRegistry(false).getService(
                 ConnectorServices.RESOURCEADAPTERS_SERVICE);
@@ -400,7 +401,7 @@ public class RaOperationUtil {
             ResourceAdapterService raService = new ResourceAdapterService(resourceAdapter, name);
             ServiceBuilder builder = serviceTarget.addService(raServiceName, raService).setInitialMode(ServiceController.Mode.ACTIVE)
                     .addDependency(ConnectorServices.RESOURCEADAPTERS_SERVICE, ResourceAdaptersService.ModifiableResourceAdaptors.class, raService.getResourceAdaptersInjector())
-                    .addDependency(ConnectorServices.RESOURCEADAPTERS_SUBSYSTEM_SERVICE, ResourceAdaptersSubsystemService.class, raService.getResourceAdaptersSubsystemInjector());
+                    .addDependency(ConnectorServices.RESOURCEADAPTERS_CONFIGURED_ADAPTERS_SERVICE, CopyOnWriteArrayListMultiMap.class, raService.getResourceAdaptersSubsystemInjector());
             // add dependency on security domain service if applicable for recovery config
             for (ConnectionDefinition cd : resourceAdapter.getConnectionDefinitions()) {
                 Security security = cd.getSecurity();
@@ -433,7 +434,7 @@ public class RaOperationUtil {
     public static void installRaServicesAndDeployFromModule(OperationContext context, String name, ModifiableResourceAdapter resourceAdapter, String fullModuleName, final List<ServiceController<?>> newControllers) throws OperationFailedException{
         ServiceName raServiceName =  installRaServices(context, name, resourceAdapter, newControllers);
         final boolean resolveProperties = true;
-        final ServiceTarget serviceTarget = context.getServiceTarget();
+        final ServiceTarget serviceTarget = context.getCapabilityServiceTarget();
         final String moduleName;
         final CapabilityServiceSupport support = context.getCapabilityServiceSupport();
 
@@ -448,20 +449,23 @@ public class RaOperationUtil {
         }
 
         Module module;
+        String moduleId = ModuleIdentifierUtil.canonicalModuleIdentifier(moduleName, slot);
         try {
-            String moduleId = ModuleIdentifierUtil.canonicalModuleIdentifier(moduleName, slot);
             module = Module.getCallerModuleLoader().loadModule(moduleId);
         } catch (ModuleNotFoundException e) {
-            throw new OperationFailedException(ConnectorLogger.ROOT_LOGGER.raModuleNotFound(moduleName, e.getMessage()), e);
+            throw new OperationFailedException(ConnectorLogger.ROOT_LOGGER.raModuleNotFound(moduleId, e.getMessage()), e);
         } catch (ModuleLoadException e) {
-            throw new OperationFailedException(ConnectorLogger.ROOT_LOGGER.failedToLoadModuleRA(moduleName, e.getMessage()), e);
+            throw new OperationFailedException(ConnectorLogger.ROOT_LOGGER.failedToLoadModuleRA(moduleId, e.getMessage()), e);
         }
         URL path = module.getExportedResource("META-INF/ra.xml");
+        if (path == null) {
+            throw new OperationFailedException(ConnectorLogger.ROOT_LOGGER.raXmlNotFound(moduleId));
+        }
         Closeable closable = null;
             try {
                 VirtualFile child;
                 if (path.getPath().contains("!")) {
-                    throw new OperationFailedException(ConnectorLogger.ROOT_LOGGER.compressedRarNotSupportedInModuleRA(moduleName));
+                    throw new OperationFailedException(ConnectorLogger.ROOT_LOGGER.compressedRarNotSupportedInModuleRA(moduleId));
                 } else {
                     child = VFS.getChild(path.getPath().split("META-INF")[0]);
 
@@ -520,7 +524,7 @@ public class RaOperationUtil {
                 }
 
             } catch (Exception e) {
-                throw new OperationFailedException(ConnectorLogger.ROOT_LOGGER.failedToLoadModuleRA(moduleName, e.getMessage()), e);
+                throw new OperationFailedException(ConnectorLogger.ROOT_LOGGER.failedToLoadModuleRA(moduleId, e.getMessage()), e);
             } finally {
                 if (closable != null) {
                     try {

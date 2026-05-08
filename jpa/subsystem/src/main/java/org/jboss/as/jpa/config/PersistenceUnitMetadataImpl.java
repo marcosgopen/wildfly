@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import jakarta.persistence.SharedCacheMode;
 import jakarta.persistence.ValidationMode;
@@ -97,7 +96,11 @@ public class PersistenceUnitMetadataImpl implements PersistenceUnitMetadata {
 
     private volatile ClassLoader cachedTempClassLoader;
 
-    private final AtomicBoolean onlyCheckIfClassFileTransformerIsNeededOnce = new AtomicBoolean(false);
+    private volatile String scopeAnnotationName="";
+    private volatile List<String> qualifierAnnotationNames = List.of();
+    private volatile boolean isDuplicate;
+
+    private static final String ORG_HIBERNATE_ORM_PROVIDER_CLASS_ENHANCER_CLASS = "org.hibernate.jpa.internal.enhance.EnhancingClassTransformerImpl";
 
     @Override
     public void setPersistenceUnitName(String name) {
@@ -370,15 +373,18 @@ public class PersistenceUnitMetadataImpl implements PersistenceUnitMetadata {
 
     @Override
     public boolean needsJPADelegatingClassFileTransformer() {
-        // WFLY-20393 Ensure that only one internal JPADelegatingClassFileTransformer bytecode transformer is configured for each Persistence Unit
-        if (onlyCheckIfClassFileTransformerIsNeededOnce.compareAndSet(false, true)) {
-            return Configuration.needClassFileTransformer(this);
-        }
-        return false;
+        return Configuration.needClassFileTransformer(this);
     }
 
     @Override
     public void addTransformer(ClassTransformer classTransformer) {
+        // WFLY-19694 Do not add Hibernate ORM 6.x/7.x bytecode enhancement class transformers
+        // (e.g. org.hibernate.jpa.internal.enhance.EnhancingClassTransformerImpl)
+        // which were already added earlier via org.jboss.as.jpa.hibernate.WildFlyClassTransformer
+        // or org.wildfly.persistence.jipijapa.hibernate7.WildFlyClassTransformer
+        if (classTransformer.getClass().getName().equals(ORG_HIBERNATE_ORM_PROVIDER_CLASS_ENHANCER_CLASS)) {
+            return;
+        }
         transformers.add(classTransformer);
         if (ROOT_LOGGER.isTraceEnabled()) {
             ROOT_LOGGER.tracef("added entity class transformer '%s' for '%s'",
@@ -416,4 +422,35 @@ public class PersistenceUnitMetadataImpl implements PersistenceUnitMetadata {
     public void setSharedCacheMode(SharedCacheMode sharedCacheMode) {
         this.sharedCacheMode = sharedCacheMode;
     }
+
+    @Override
+    public void setScopeAnnotationName(String scopeAnnotationName) {
+        this.scopeAnnotationName = scopeAnnotationName;
+    }
+
+    @Override
+    public String getScopeAnnotationName() {
+        return scopeAnnotationName;
+    }
+
+    @Override
+    public void setQualifierAnnotationNames(List<String> qualifierAnnotationNames) {
+        this.qualifierAnnotationNames = List.copyOf(qualifierAnnotationNames);
+    }
+
+    @Override
+    public List<String> getQualifierAnnotationNames() {
+        return qualifierAnnotationNames;
+    }
+
+    @Override
+    public boolean isDuplicate() {
+        return isDuplicate;
+    }
+
+    @Override
+    public void setDuplicate(boolean b) {
+        this.isDuplicate = b;
+    }
+
 }

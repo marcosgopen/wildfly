@@ -4,6 +4,8 @@
  */
 package org.jboss.as.clustering.jgroups.subsystem;
 
+import static org.jboss.as.clustering.jgroups.subsystem.ProtocolChildResourceDefinitionRegistrar.findProtocolClass;
+
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -12,6 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.ServiceLoader;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
@@ -35,25 +38,29 @@ import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.controller.descriptions.OverrideDescriptionProvider;
 import org.jboss.as.controller.descriptions.ResourceDescriptionResolver;
+import org.jboss.as.controller.management.Capabilities;
 import org.jboss.as.controller.registry.AttributeAccess;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.PlaceholderResource;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.dmr.ModelNode;
-import org.jboss.modules.Module;
-import org.jboss.modules.ModuleLoadException;
-import org.jgroups.Global;
+import org.jgroups.Address;
 import org.jgroups.JChannel;
 import org.jgroups.jmx.JmxConfigurator;
 import org.jgroups.protocols.FORK;
 import org.jgroups.protocols.TP;
+import org.jgroups.stack.AddressGenerator;
 import org.jgroups.stack.Protocol;
 import org.jgroups.stack.ProtocolStack;
+import org.wildfly.clustering.function.Function;
+import org.wildfly.clustering.jgroups.spi.AddressFactory;
 import org.wildfly.clustering.jgroups.spi.ChannelConfiguration;
 import org.wildfly.clustering.jgroups.spi.ForkChannelFactory;
 import org.wildfly.clustering.jgroups.spi.ForkChannelFactoryConfiguration;
 import org.wildfly.clustering.jgroups.spi.JGroupsServiceDescriptor;
-import org.wildfly.common.function.Functions;
+import org.wildfly.clustering.jgroups.spi.TransportConfiguration;
+import org.wildfly.service.BlockingLifecycle;
+import org.wildfly.service.Installer;
 import org.wildfly.service.Installer.StartWhen;
 import org.wildfly.subsystem.resource.ChildResourceDefinitionRegistrar;
 import org.wildfly.subsystem.resource.ManagementResourceRegistrar;
@@ -73,6 +80,8 @@ import org.wildfly.subsystem.service.capture.ServiceValueExecutorRegistry;
  * @param <C> the cache configuration type
  */
 public abstract class AbstractChannelResourceDefinitionRegistrar<C extends ChannelConfiguration> implements ChildResourceDefinitionRegistrar, ResourceServiceConfigurator, ResourceOperationRuntimeHandler, UnaryOperator<ResourceDescriptor.Builder> {
+    // Typically contributed by Infinispan subsystem
+    static final AddressFactory ADDRESS_FACTORY = ServiceLoader.load(AddressFactory.class, AddressFactory.class.getClassLoader()).findFirst().orElse(null);
 
     private static final RuntimeCapability<Void> CHANNEL = RuntimeCapability.Builder.of(JGroupsServiceDescriptor.CHANNEL).setAllowMultipleRegistrations(true).build();
     private static final RuntimeCapability<Void> CHANNEL_FACTORY = RuntimeCapability.Builder.of(ForkChannelFactory.SERVICE_DESCRIPTOR).setAllowMultipleRegistrations(true).build();
@@ -93,18 +102,17 @@ public abstract class AbstractChannelResourceDefinitionRegistrar<C extends Chann
         default ResourceServiceInstaller configure(OperationContext context, ModelNode model) throws OperationFailedException {
             String name = context.getCurrentAddressValue();
             ServiceDependency<ForkChannelFactoryConfiguration> configuration = this.getForkChannelFactoryConfigurationResolver().resolve(context, model);
-            Consumer<ForkChannelFactoryConfiguration> stop = new Consumer<>() {
+            Consumer<ForkChannelFactoryConfiguration> removeFork = new Consumer<>() {
                 @Override
                 public void accept(ForkChannelFactoryConfiguration configuration) {
                     ProtocolStack stack = configuration.getChannel().getProtocolStack();
-                    FORK fork = (FORK) stack.findProtocol(FORK.class);
+                    FORK fork = stack.findProtocol(FORK.class);
                     fork.remove(name);
                 }
             };
-            return CapabilityServiceInstaller.builder(CHANNEL_FACTORY, org.jboss.as.clustering.jgroups.ForkChannelFactory::new, configuration)
-                    .requires(List.of(configuration))
-                    .blocking()
-                    .onStop(stop)
+            return CapabilityServiceInstaller.BlockingBuilder.of(CHANNEL_FACTORY, configuration)
+                    .map(org.jboss.as.clustering.jgroups.ForkChannelFactory::new)
+                    .withLifecycle(BlockingLifecycle.compose(removeFork))
                     .startWhen(StartWhen.AVAILABLE)
                     .build();
         }
@@ -217,7 +225,7 @@ public abstract class AbstractChannelResourceDefinitionRegistrar<C extends Chann
         Collection<ResourceServiceInstaller> installers = new ArrayList<>(4);
 
         // Create installer for service providing the channel configuration
-        installers.add(CapabilityServiceInstaller.builder(this.configurator.getCapability(), this.configurator.getChannelConfigurationResolver().resolve(context, model)).build());
+        installers.add(CapabilityServiceInstaller.BlockingBuilder.of(this.configurator.getCapability(), this.configurator.getChannelConfigurationResolver().resolve(context, model)).startWhen(Installer.StartWhen.AVAILABLE).build());
 
         // Create installer for service providing a connected JChannel
         ServiceDependency<ChannelConfiguration> channelConfiguration = ServiceDependency.on(ChannelConfiguration.SERVICE_DESCRIPTOR, name);
@@ -228,8 +236,22 @@ public abstract class AbstractChannelResourceDefinitionRegistrar<C extends Chann
                 ChannelConfiguration configuration = channelConfiguration.get();
                 try {
                     JChannel channel = configuration.getChannelFactory().createChannel(name);
-                    if (JGroupsLogger.ROOT_LOGGER.isTraceEnabled())  {
+                    if (JGroupsLogger.ROOT_LOGGER.isTraceEnabled()) {
                         JGroupsLogger.ROOT_LOGGER.tracef("JGroups channel %s created with configuration:%n %s", name, channel.getProtocolStack().printProtocolSpec(true));
+                    }
+                    if (ADDRESS_FACTORY != null) {
+                        TransportConfiguration.Topology topology = configuration.getChannelFactory().getConfiguration().getTransport().getTopology();
+                        channel.addAddressGenerator(new AddressGenerator() {
+                            @Override
+                            public Address generateAddress(String name) {
+                                return ADDRESS_FACTORY.createAddress(name, topology);
+                            }
+
+                            @Override
+                            public Address generateAddress() {
+                                return this.generateAddress(null);
+                            }
+                        });
                     }
                     return channel.stats(configuration.isStatisticsEnabled());
                 } catch (Exception e) {
@@ -237,38 +259,52 @@ public abstract class AbstractChannelResourceDefinitionRegistrar<C extends Chann
                 }
             }
         };
-        ServiceValueExecutorRegistry<JChannel> registry = this.channelRegistry;
-        ServiceDependency<JChannel> registryKey = ServiceDependency.on(JGroupsServiceDescriptor.CHANNEL, name);
-        Consumer<JChannel> connect = new Consumer<>() {
+        Function<JChannel, BlockingLifecycle> lifecycle = new Function<>() {
             @Override
-            public void accept(JChannel disconnectedChannel) {
-                TP transport = disconnectedChannel.getProtocolStack().getTransport();
-                ChannelConfiguration configuration = channelConfiguration.get();
-                JGroupsLogger.ROOT_LOGGER.connecting(name, disconnectedChannel.getName(), configuration.getClusterName(), new InetSocketAddress(transport.getBindAddress(), transport.getBindPort()));
-                try {
-                    registry.add(registryKey).accept(disconnectedChannel.connect(configuration.getClusterName()));
-                } catch (Exception e) {
-                    disconnectedChannel.close();
-                    throw new IllegalStateException(e);
-                }
-                JGroupsLogger.ROOT_LOGGER.connected(name, disconnectedChannel.getName(), configuration.getClusterName(), disconnectedChannel.getView());
+            public BlockingLifecycle apply(JChannel channel) {
+                return new BlockingLifecycle() {
+                    @Override
+                    public boolean isStarted() {
+                        return channel.isConnected();
+                    }
+
+                    @Override
+                    public void start() {
+                        TP transport = channel.getProtocolStack().getTransport();
+                        ChannelConfiguration configuration = channelConfiguration.get();
+                        JGroupsLogger.ROOT_LOGGER.connecting(name, channel.getName(), configuration.getClusterName(), new InetSocketAddress(transport.getBindAddress(), transport.getBindPort()));
+                        try {
+                            channel.connect(configuration.getClusterName());
+                        } catch (Exception e) {
+                            channel.close();
+                            throw new IllegalStateException(e);
+                        }
+                        JGroupsLogger.ROOT_LOGGER.connected(name, channel.getName(), configuration.getClusterName(), channel.getView());
+                        new MBeanRegistrationTask(server, JmxConfigurator::registerChannel, name).accept(channel);
+                    }
+
+                    @Override
+                    public void stop() {
+                        new MBeanRegistrationTask(server, JmxConfigurator::unregisterChannel, name).accept(channel);
+                        ChannelConfiguration configuration = channelConfiguration.get();
+                        JGroupsLogger.ROOT_LOGGER.disconnecting(name, channel.getName(), configuration.getClusterName(), channel.getView());
+                        channel.disconnect();
+                        JGroupsLogger.ROOT_LOGGER.disconnected(name, channel.getName(), configuration.getClusterName());
+                    }
+
+                    @Override
+                    public void close() {
+                        channel.close();
+                    }
+                };
             }
         };
-        Consumer<JChannel> disconnect = new Consumer<>() {
-            @Override
-            public void accept(JChannel connectedChannel) {
-                registry.remove(registryKey);
-                ChannelConfiguration configuration = channelConfiguration.get();
-                JGroupsLogger.ROOT_LOGGER.disconnecting(name, connectedChannel.getName(), configuration.getClusterName(), connectedChannel.getView());
-                connectedChannel.disconnect();
-                JGroupsLogger.ROOT_LOGGER.disconnected(name, connectedChannel.getName(), configuration.getClusterName());
-            }
-        };
-        installers.add(CapabilityServiceInstaller.builder(CHANNEL, factory).blocking()
+        installers.add(CapabilityServiceInstaller.BlockingBuilder.of(CHANNEL, factory, ServiceDependency.on(Capabilities.MANAGEMENT_EXECUTOR))
                 .requires(List.of(channelConfiguration, server))
-                .onStart(new MBeanRegistrationTask(server, JmxConfigurator::registerChannel, name).andThen(connect))
-                .onStop(disconnect.andThen(new MBeanRegistrationTask(server, JmxConfigurator::unregisterChannel, name)).andThen(Functions.closingConsumer()))
+                .withLifecycle(lifecycle)
                 .build());
+
+        installers.add(this.channelRegistry.capture(ServiceDependency.on(JGroupsServiceDescriptor.CHANNEL, name)));
 
         // Create installers for jndi bindings
         installers.add(new BinderServiceInstaller(JGroupsBindingFactory.CHANNEL.apply(name), context.getCapabilityServiceName(JGroupsServiceDescriptor.CHANNEL, name)));
@@ -319,7 +355,7 @@ public abstract class AbstractChannelResourceDefinitionRegistrar<C extends Chann
         }
     }
 
-    /*
+    /**
      * Unregisters override channel model
      */
     @Override
@@ -329,7 +365,7 @@ public abstract class AbstractChannelResourceDefinitionRegistrar<C extends Chann
         ManagementResourceRegistration registration = context.getResourceRegistrationForUpdate();
         if (address.equals(stackAddress)) {
             // This is a fork channel resource, unregister runtime attributes of protocols
-            for (PathElement protocolPath : registration.getChildAddresses(stackAddress)) {
+            for (PathElement protocolPath : registration.getChildAddresses(PathAddress.EMPTY_ADDRESS)) {
                 ManagementResourceRegistration protocolRegistration = registration.getSubModel(PathAddress.pathAddress(protocolPath));
                 for (Map.Entry<String, AttributeAccess> entry : protocolRegistration.getAttributes(PathAddress.EMPTY_ADDRESS).entrySet()) {
                     if (entry.getValue().getStorageType() == AttributeAccess.Storage.RUNTIME) {
@@ -391,16 +427,4 @@ public abstract class AbstractChannelResourceDefinitionRegistrar<C extends Chann
         return registration;
     }
 
-    static Class<? extends Protocol> findProtocolClass(OperationContext context, String protocolName, ModelNode protocolModel) throws OperationFailedException {
-        String moduleName = ProtocolChildResourceDefinitionRegistrar.MODULE.resolveModelAttribute(context, protocolModel).asString();
-        String className = protocolName;
-        if (moduleName.equals(ProtocolChildResourceDefinitionRegistrar.MODULE.getDefaultValue().asString()) && !protocolName.startsWith(Global.PREFIX)) {
-            className = Global.PREFIX + protocolName;
-        }
-        try {
-            return Module.getContextModuleLoader().loadModule(moduleName).getClassLoader().loadClass(className).asSubclass(Protocol.class);
-        } catch (ClassNotFoundException | ModuleLoadException e) {
-            throw JGroupsLogger.ROOT_LOGGER.unableToLoadProtocolClass(className);
-        }
-    }
 }
